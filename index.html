@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bloc</title>
+  <meta name="description" content="Notas con avisos. Selecciona una palabra y elige en el calendario cuándo debe sonar.">
+  <meta name="theme-color" content="#1a1814">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%231a1814' width='100' height='100' rx='20'/><text y='.72em' x='50' text-anchor='middle' fill='%23f7f1e6' font-size='64' font-family='Georgia'>B</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,620&family=Outfit:wght@380;500;640&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css?v=186">
+  <script>
+    try { if (!localStorage.getItem("bloc-cuenta")) document.documentElement.classList.add("locked-out"); } catch (e) {}
+  </script>
+</head>
+<body>
+  <div class="desk">
+    <header class="top">
+      <div class="brand-row">
+        <button type="button" id="btn-app-menu" class="icon-tool icon-menu" aria-label="Menú" aria-haspopup="menu" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" d="M5 7.2h14M5 12h14M5 16.8h14"/>
+          </svg>
+        </button>
+        <div id="account-bar" class="account-bar">
+          <h2>Cuenta</h2>
+          <p id="account-who"></p>
+        </div>
+      </div>
+      <div class="search-row">
+        <label class="search-wrap">
+          <span class="sr">Buscar</span>
+          <input id="search" type="search" placeholder="Buscar" autocomplete="off" name="search">
+          <button type="button" class="search-clear" hidden aria-label="Borrar búsqueda">✕</button>
+        </label>
+      </div>
+      <div class="top-tools">
+        <button type="button" id="btn-add-template" class="plantilla-tool">+plantilla</button>
+        <button type="button" id="btn-empty-trash-top" class="icon-tool icon-trash" hidden aria-label="Vaciar eliminados">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M5 7.4h14"/>
+            <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M9.2 7.2V5.4h5.6v1.8"/>
+            <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M7.4 7.4 8.3 19h7.4l.9-11.6"/>
+          </svg>
+        </button>
+        <button type="button" id="btn-back-home" class="icon-tool icon-menu" aria-label="Volver">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M14.5 6.5 8.8 12l5.7 5.5"/>
+          </svg>
+        </button>
+        <div class="notify-wrap">
+          <button type="button" id="btn-notify" class="icon-tool icon-notify" aria-expanded="false" aria-label="Notificaciones">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+              <path fill="#fff" d="M12 3.6a1 1 0 0 1 1 .9v.6a5.2 5.2 0 0 1 4.2 5.1v2.8l1.2 1.8H5.6l1.2-1.8V10.2A5.2 5.2 0 0 1 11 5.1v-.6a1 1 0 0 1 1-.9z"/>
+              <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M9.7 18.2a2.3 2.3 0 0 0 4.6 0"/>
+            </svg>
+          </button>
+          <div id="notify-panel" class="notify-panel" hidden>
+            <h3>Notificaciones</h3>
+            <p class="notify-label">Van a pasar</p>
+            <ul id="notify-upcoming"></ul>
+            <p class="notify-label">Recientes</p>
+            <ul id="notify-recent"></ul>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="book">
+    <div id="plan-gate" class="plan-gate" hidden>
+      <div class="plan-card">
+        <h2>Bloc</h2>
+        <p>Notas con avisos, gastos por categoría, cuentas, plantillas, copias y contraseña maestra.</p>
+        <button type="button" id="plan-go-pay" class="solid">Ver planes</button>
+      </div>
+    </div>
+      <div class="list-col">
+        <div id="template-bar" class="template-bar">
+          <div id="template-chips" class="template-titles"></div>
+          <button type="button" id="template-more" hidden aria-label="Más plantillas" aria-expanded="false">▾</button>
+          <div id="template-all" class="template-all" hidden></div>
+        </div>
+        <section class="page list-page" aria-label="Listado de notas">
+          <div id="trash-actions" class="trash-actions" hidden>
+            <button type="button" id="btn-empty-trash" class="ghost tiny">Vaciar eliminados</button>
+          </div>
+          <ul id="file-list" class="file-list"></ul>
+        </section>
+      </div>
+
+      <section class="page editor-page" aria-label="Nota abierta">
+        <div id="editor-locked" class="editor-empty" hidden>
+          <p>Esta nota está protegida.</p>
+          <p>Hace falta la contraseña maestra para abrirla.</p>
+        </div>
+        <div id="editor-empty" class="editor-empty">
+          <p>El + crea una nota y la abre en la lista.</p>
+          <p>Dentro, selecciona una palabra o una frase para programar cuándo sale el aviso.</p>
+        </div>
+        <div id="editor" hidden>
+          <div class="editor-top">
+            <div id="file-title" class="file-title is-empty" contenteditable="true" role="textbox" aria-label="Título" data-placeholder="Título"></div>
+          </div>
+          <div class="paper">
+            <div id="body" class="body is-empty" contenteditable="true" role="textbox" aria-label="Texto de la nota" data-placeholder="Escribe aquí. Selecciona palabras para convertirlas en aviso."></div>
+            <div id="line-arrows" class="line-arrows"></div>
+            <aside id="spend-rail" class="spend-rail" aria-label="Gastos">
+              <label class="spend-names">
+                <input id="spend-show-names" type="checkbox" name="spend-show-names">
+                Nombres
+              </label>
+              <div id="spend-icons"></div>
+            </aside>
+          </div>
+          <p id="math-total" class="math-total" hidden></p>
+          <p id="status" class="status" role="status"></p>
+          <div id="note-alarms-block">
+            <h3>Avisos de esta nota</h3>
+            <ul id="file-alarms" class="file-alarms"></ul>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="focus-view" class="focus-view" hidden>
+    <div class="focus-sheet">
+    <div id="focus-title-slot" class="focus-title-slot"></div>
+    <div class="focus-bar">
+      <button type="button" id="focus-back" class="icon-tool" aria-label="Volver">←</button>
+      <label class="search-wrap">
+        <span class="sr">Buscar en la nota</span>
+        <input id="focus-search" type="search" placeholder="Buscar en la nota" autocomplete="off" name="focus-search">
+        <button type="button" class="search-clear" hidden aria-label="Borrar búsqueda">✕</button>
+      </label>
+      <div class="focus-history">
+        <button type="button" id="focus-undo" class="icon-tool" aria-label="Deshacer" disabled>
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M8.2 8.2H5.2V5.2"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M5.6 8.4a7.2 7.2 0 1 1-.4 6.2"/></svg>
+        </button>
+        <button type="button" id="focus-redo" class="icon-tool" aria-label="Rehacer" disabled>
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M15.8 8.2h3v-3"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M18.4 8.4a7.2 7.2 0 1 0 .4 6.2"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="focus-slot" class="focus-slot"></div>
+    </div>
+  </div>
+
+  <div id="line-cat-modal" class="modal" hidden>
+    <div class="modal-card paper-card spend-card" role="dialog" aria-modal="true" aria-labelledby="line-cat-heading">
+      <div class="modal-head look-head">
+        <h2 id="line-cat-heading">Categoría</h2>
+        <button type="button" id="line-cat-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <div id="line-cat-grid" class="line-cat-grid"></div>
+      <div class="line-cat-foot">
+        <button type="button" id="line-cat-custom">Personalizado</button>
+        <button type="button" id="line-cat-reset">Restaurar categorías</button>
+      </div>
+      <div class="line-cat-view">
+        <label><input id="cat-show-icon" type="checkbox" name="cat-show-icon" checked> Mostrar icono</label>
+        <label><input id="cat-show-name" type="checkbox" name="cat-show-name"> Mostrar nombre</label>
+      </div>
+      <div class="line-cat-view">
+        <label><input id="cat-split-totals" type="checkbox" name="cat-split-totals"> Separar sumatorias por totales</label>
+      </div>
+    </div>
+  </div>
+
+  <div id="line-cat-menu" class="note-menu" hidden role="menu">
+    <button type="button" data-cat-action="icon">Cambiar icono</button>
+    <button type="button" data-cat-action="name">Cambiar nombre</button>
+    <button type="button" data-cat-action="order">Cambiar posición</button>
+  </div>
+
+  <div id="line-icon-modal" class="modal" hidden>
+    <div class="modal-card paper-card spend-card" role="dialog" aria-modal="true" aria-labelledby="line-icon-heading">
+      <div class="modal-head look-head">
+        <h2 id="line-icon-heading">Cambiar icono</h2>
+        <button type="button" id="line-icon-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <div id="line-icon-grid" class="line-icon-grid"></div>
+    </div>
+  </div>
+
+  <div id="line-name-modal" class="modal" hidden>
+    <div class="modal-card paper-card spend-card" role="dialog" aria-modal="true" aria-labelledby="line-name-heading">
+      <div class="modal-head look-head">
+        <h2 id="line-name-heading">Cambiar nombre</h2>
+        <button type="button" id="line-name-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <input id="line-name-text" type="text" name="line-name-text" aria-label="Nombre" autocomplete="off">
+      <div class="modal-actions">
+        <button type="button" id="line-name-save" class="solid">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="line-order-modal" class="modal" hidden>
+    <div class="modal-card paper-card spend-card" role="dialog" aria-modal="true" aria-labelledby="line-order-heading">
+      <div class="modal-head look-head">
+        <h2 id="line-order-heading">Cambiar posición</h2>
+        <button type="button" id="line-order-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <input id="line-order-number" type="number" min="1" step="1" name="line-order-number" aria-label="Posición">
+      <div class="modal-actions">
+        <button type="button" id="line-order-save" class="solid">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="spend-events-modal" class="modal" hidden>
+    <div class="modal-card paper-card spend-card" role="dialog" aria-modal="true" aria-labelledby="spend-events-heading">
+      <div class="modal-head look-head">
+        <h2 id="spend-events-heading">Gastos</h2>
+        <button type="button" id="spend-events-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <p id="spend-events-total" class="spend-total"></p>
+      <ul id="spend-events-list" class="spend-events"></ul>
+      <form id="spend-event-form" class="spend-form">
+        <input id="spend-event-name" type="text" placeholder="Qué fue" autocomplete="off" required name="spend-event-name">
+        <input id="spend-event-amount" type="text" inputmode="decimal" placeholder="Valor" required name="spend-event-amount">
+        <button type="submit" class="solid">Agregar</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="spend-custom-modal" class="modal" hidden>
+    <div class="modal-card paper-card spend-card" role="dialog" aria-modal="true" aria-labelledby="spend-custom-heading">
+      <div class="modal-head look-head">
+        <h2 id="spend-custom-heading">Personalizado</h2>
+        <button type="button" id="spend-custom-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <input id="spend-custom-name" type="text" placeholder="Nombre" autocomplete="off" name="spend-custom-name">
+      <div id="spend-custom-icons" class="spend-pick"></div>
+      <div class="modal-actions">
+        <button type="button" id="spend-custom-save" class="solid">Agregar</button>
+      </div>
+    </div>
+  </div>
+
+  <button type="button" id="add-note" class="add-note" aria-label="Nueva nota">+</button>
+  <input type="file" id="import-file" accept="application/json" hidden name="import-file">
+  <input type="file" id="backup-file" accept="application/json" hidden name="backup-file">
+
+  <div id="app-menu" class="note-menu app-menu" hidden role="menu">
+    <button type="button" data-menu="home" aria-label="Inicio">
+      <span class="menu-ico icon-home">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M4.5 11.2 12 5l7.5 6.2"/>
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M7 10.6V19h10v-8.4"/>
+        </svg>
+      </span>
+      <span>Inicio</span>
+      <span class="info-ico" data-info="Vuelve al buscador, las plantillas y las notas." role="button" tabindex="0" aria-label="Qué hace Inicio"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></span>
+    </button>
+    <button type="button" id="btn-theme" aria-pressed="false" aria-label="Tema">
+      <span class="menu-ico icon-theme" id="theme-icon"></span>
+      <span>Tema</span>
+      <span class="info-ico" data-info="Cambia el fondo entre claro y oscuro." role="button" tabindex="0" aria-label="Qué hace Tema"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></span>
+    </button>
+    <button type="button" id="toggle-archived" aria-pressed="false" aria-label="Archivados">
+      <span class="menu-ico icon-archive">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M4.2 8h15.6L17.6 5H6.4L4.2 8z"/>
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M5.2 8h13.6v9.6a1.4 1.4 0 0 1-1.4 1.4H6.6a1.4 1.4 0 0 1-1.4-1.4V8z"/>
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M9 12.2h6"/>
+        </svg>
+      </span>
+      <span>Archivados</span>
+      <span class="info-ico" data-info="Muestra las notas que archivaste." role="button" tabindex="0" aria-label="Qué hace Archivados"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></span>
+    </button>
+    <button type="button" id="toggle-trash" aria-pressed="false" aria-label="Eliminados">
+      <span class="menu-ico icon-trash">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M5 7.4h14"/>
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M9.2 7.2V5.4h5.6v1.8"/>
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M7.4 7.4 8.3 19h7.4l.9-11.6"/>
+          <path fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" d="M10.4 10.4v5.6M13.6 10.4v5.6"/>
+        </svg>
+      </span>
+      <span>Eliminados</span>
+      <span class="info-ico" data-info="Abre la papelera. Con clic derecho restauras una nota, todas las notas o las plantillas. Vaciar eliminados las borra." role="button" tabindex="0" aria-label="Qué hace Eliminados"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></span>
+    </button>
+    <button type="button" id="btn-eye" data-menu="panel" aria-pressed="true" aria-label="Ocultar panel">
+      <span class="menu-ico icon-eye" id="eye-icon"></span>
+      <span id="eye-label">Ocultar panel</span>
+      <span class="info-ico" data-info="Muestra u oculta el panel de la nota. Al entrar viene oculto." role="button" tabindex="0" aria-label="Qué hace el panel"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></span>
+    </button>
+    <button type="button" data-menu="editor" aria-label="Editor">
+      <span class="menu-ico icon-editor">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M4.5 8h9M4.5 16h8"/>
+          <circle cx="16.5" cy="8" r="2.1" fill="none" stroke="#fff" stroke-width="1.7"/>
+          <circle cx="15" cy="16" r="2.1" fill="none" stroke="#fff" stroke-width="1.7"/>
+        </svg>
+      </span>
+      <span>Editor</span>
+      <span class="info-ico" data-info="Ajusta la separación de las notas y un solo tamaño para todas las plantillas." role="button" tabindex="0" aria-label="Qué hace Editor"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></span>
+    </button>
+    <button type="button" data-menu="export">
+      <span class="menu-ico icon-export">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M12 15.5V4.4"/>
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M8.2 8.2 12 4.4l3.8 3.8"/>
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M5 14.2h14v5.4H5z"/>
+        </svg>
+      </span>
+      <span>Exportar</span>
+      <span class="info-ico" data-info="Guarda una copia de las notas en un archivo." role="button" tabindex="0" aria-label="Qué hace Exportar"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></span>
+    </button>
+    <button type="button" data-menu="import">
+      <span class="menu-ico icon-import">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M12 4.4v11.1"/>
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M8.2 11.7 12 15.5l3.8-3.8"/>
+          <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M5 14.2h14v5.4H5z"/>
+        </svg>
+      </span>
+      <span>Importar</span>
+      <span class="info-ico" data-info="Trae notas desde un archivo que hayas guardado." role="button" tabindex="0" aria-label="Qué hace Importar"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></span>
+    </button>
+    <button type="button" id="btn-pay" data-menu="pay" aria-label="Pagos">
+      <span class="menu-ico icon-pay">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <rect x="3.5" y="6" width="17" height="12" rx="2" fill="none" stroke="#fff" stroke-width="1.7"/>
+          <path fill="none" stroke="#fff" stroke-width="1.7" d="M3.5 10h17"/>
+        </svg>
+      </span>
+      <span>Pagos</span>
+      <span class="info-ico" data-info="En el computador pagas con Nequi, Bancolombia o Bre-B. En la aplicación, con Google Play. Al aprobarse se activa el plan o queda el saldo." role="button" tabindex="0" aria-label="Qué hace Pagos"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></span>
+    </button>
+    <button type="button" id="btn-account" data-menu="account" aria-label="Cuenta">
+      <span class="menu-ico icon-account">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <circle cx="12" cy="8" r="3.1" fill="#fff"/>
+          <path fill="#fff" d="M5.4 18.8c.9-3 3.5-4.6 6.6-4.6s5.7 1.6 6.6 4.6z"/>
+        </svg>
+      </span>
+      <span>Cuenta</span>
+      <span class="info-ico" data-info="Entra a la cuenta y cambia la contraseña." role="button" tabindex="0" aria-label="Qué hace Cuenta"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></span>
+    </button>
+  </div>
+
+  <button type="button" id="sel-action" class="sel-action" hidden>Programar aviso</button>
+
+  <div id="quick-modal" class="modal" hidden>
+    <div class="modal-card paper-card quick-card" role="dialog" aria-modal="true" aria-labelledby="quick-heading">
+      <div class="modal-head look-head">
+        <h2 id="quick-heading">Avisos rápidos</h2>
+        <button type="button" id="quick-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="quick-list">
+        <button type="button" data-action="quick" data-quick="60">En 1 hora</button>
+        <button type="button" data-action="quick" data-quick="180">En 3 horas</button>
+        <button type="button" data-action="quick" data-quick="360">En 6 horas</button>
+        <button type="button" data-action="quick" data-quick="720">En 12 horas</button>
+        <button type="button" data-action="quick" data-quick="today18">Hoy 6:00 p. m.</button>
+        <button type="button" data-action="quick" data-quick="today20">Hoy 8:00 p. m.</button>
+        <button type="button" data-action="custom">Personalizado</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="note-menu" class="note-menu" hidden role="menu">
+    <button type="button" data-action="underline" hidden>Subrayar</button>
+    <button type="button" data-action="calendar">Aviso en toda la nota</button>
+    <button type="button" data-action="alarm-part" hidden>Aviso en lo seleccionado</button>
+    <button type="button" data-action="quick-menu">Avisos rápidos</button>
+    <button type="button" data-action="color">Color</button>
+    <button type="button" data-action="pin">Fijar</button>
+    <button type="button" data-action="order">Cambiar orden</button>
+    <button type="button" data-action="move-template">Cambiar plantilla</button>
+    <button type="button" data-action="lock">Poner contraseña</button>
+    <button type="button" data-action="sound">Silenciar</button>
+    <button type="button" data-action="delete">Eliminar</button>
+    <button type="button" data-action="archive">Archivar</button>
+    <button type="button" data-action="restore" hidden>Restaurar</button>
+    <button type="button" data-action="restore-notes" hidden>Restaurar notas</button>
+    <button type="button" data-action="restore-templates" hidden>Restaurar plantillas</button>
+  </div>
+
+  <div id="restore-template-modal" class="modal" hidden>
+    <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="restore-template-heading">
+      <div class="modal-head look-head">
+        <h2 id="restore-template-heading">Restaurar en</h2>
+        <button type="button" id="restore-template-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <p id="restore-template-lead" class="look-lead">Elige la plantilla.</p>
+      <label class="tpl-field">Plantilla
+        <select id="restore-template-select" name="restore-template-select" aria-label="Plantilla"></select>
+      </label>
+      <div class="modal-actions">
+        <button type="button" id="restore-template-save" class="solid">Restaurar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="move-template-modal" class="modal" hidden>
+    <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="move-template-heading">
+      <div class="modal-head look-head">
+        <h2 id="move-template-heading">Cambiar plantilla</h2>
+        <button type="button" id="move-template-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <label class="tpl-field">Plantilla
+        <select id="move-template-select" name="move-template-select" aria-label="Plantilla"></select>
+      </label>
+      <div class="modal-actions">
+        <button type="button" id="move-template-save" class="solid">Mover</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="color-modal" class="modal" hidden>
+    <div class="modal-card paper-card color-modal-card" role="dialog" aria-modal="true" aria-labelledby="color-heading">
+      <div class="modal-head">
+        <h2 id="color-heading">Color de la nota</h2>
+        <button type="button" id="color-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="color-picker-field">
+        <input id="note-color" type="color" value="#fff3c4" aria-label="Color" name="note-color">
+        <input id="note-hex" type="text" value="#fff3c4" maxlength="7" spellcheck="false" aria-label="Hexadecimal" name="note-hex">
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="note-color-save" class="solid">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tpl-new-modal" class="modal" hidden>
+    <div class="modal-card paper-card color-modal-card" role="dialog" aria-modal="true" aria-labelledby="tpl-new-heading">
+      <div class="modal-head">
+        <h2 id="tpl-new-heading">Nueva plantilla</h2>
+        <button type="button" id="tpl-new-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <label class="tpl-field">
+        <input id="tpl-new-name" type="text" autocomplete="off" placeholder="Nombre de la plantilla" aria-label="Nombre de la plantilla" name="tpl-new-name">
+      </label>
+      <label class="info-switch tpl-math-switch">
+        <input id="tpl-new-math" name="tpl-new-math" type="checkbox">
+        Función matemática
+      </label>
+      <div class="pos-row">
+        <span>Posición</span>
+        <input id="tpl-new-order" type="number" min="1" step="1" aria-label="Posición" name="tpl-new-order">
+      </div>
+      <label class="tpl-field color-line">Color
+        <span class="color-picker-field">
+          <input id="tpl-new-color" type="color" value="#fff3c4" aria-label="Color" name="tpl-new-color">
+          <input id="tpl-new-hex" type="text" value="#fff3c4" maxlength="7" spellcheck="false" aria-label="Hexadecimal" name="tpl-new-hex">
+        </span>
+      </label>
+      <div class="modal-actions">
+        <button type="button" id="tpl-new-save" class="solid">Crear plantilla</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="sure-modal" class="modal" hidden>
+    <div class="modal-card paper-card info-card" role="dialog" aria-modal="true" aria-labelledby="sure-heading">
+      <div class="modal-head look-head">
+        <h2 id="sure-heading">¿Estás seguro?</h2>
+        <button type="button" id="sure-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <p id="sure-text" class="info-text"></p>
+      <div class="modal-actions">
+        <button type="button" id="sure-no" class="ghost">Cancelar</button>
+        <button type="button" id="sure-yes" class="solid">Sí</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="info-modal" class="modal" hidden>
+    <div class="modal-card paper-card info-card" role="dialog" aria-modal="true" aria-labelledby="info-heading">
+      <div class="modal-head look-head">
+        <h2 id="info-heading">Información</h2>
+        <button type="button" id="info-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <p id="info-text" class="info-text"></p>
+    </div>
+  </div>
+
+  <div id="tpl-look-modal" class="modal" hidden>
+    <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="tpl-look-heading">
+      <div class="modal-head look-head">
+        <h2 id="tpl-look-heading">Editor</h2>
+        <button type="button" id="tpl-look-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <label class="info-switch">
+        <input id="show-info" name="show-info" type="checkbox" checked>
+        Iconos de información de notas
+      </label>
+      <label class="info-switch">
+        <input id="note-lines" name="note-lines" type="checkbox">
+        Línea en cada renglón de notas
+      </label>
+      <label class="info-switch">
+        <input id="offline-mode" name="offline-mode" type="checkbox">
+        <span class="switch-label">Usar sin internet<button type="button" class="info-ico" id="offline-info" aria-label="Qué hace usar sin internet"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></button></span>
+      </label>
+      <label class="info-switch">
+        <input id="hide-note-alarms" name="hide-note-alarms" type="checkbox">
+        Ocultar avisos de la nota
+      </label>
+      <label class="info-switch">
+        <input id="alarm-sound" name="alarm-sound" type="checkbox" checked>
+        Sonido de avisos
+      </label>
+      <label class="info-switch">
+        <input id="alarm-continuous" name="alarm-continuous" type="checkbox">
+        Sonido continuo
+      </label>
+      <div id="alarm-continuous-opts" hidden>
+        <label class="info-switch alarm-sub">
+          <input id="alarm-until-touch" name="alarm-until-touch" type="checkbox">
+          Sonar seguido hasta tocar la pantalla
+        </label>
+        <label class="info-switch alarm-sub">
+          <input id="alarm-vibrate" name="alarm-vibrate" type="checkbox">
+          Vibrar en el celular mientras suena
+        </label>
+      </div>
+      <label class="info-switch">
+        <input id="open-full" name="open-full" type="checkbox">
+        Abrir la nota a pantalla completa
+      </label>
+      <label class="info-switch">
+        <input id="show-panel" name="show-panel" type="checkbox">
+        Mostrar el panel de al lado
+      </label>
+      <label class="info-switch">
+        <input id="ask-password" name="ask-password" type="checkbox">
+        Pedir contraseña al abrir una nota protegida
+      </label>
+      <label class="info-switch">
+        <input id="confirm-delete" name="confirm-delete" type="checkbox" checked>
+        Confirmar antes de eliminar
+      </label>
+      <label class="info-switch">
+        <input id="no-templates" name="no-templates" type="checkbox">
+        Sin plantillas
+      </label>
+      <div class="look-row">
+        <span>Separación</span>
+        <input id="note-gap" type="range" min="0" max="18" step="1" value="6" name="note-gap" aria-label="Separación">
+      </div>
+      <div class="look-row" id="tpl-size-row">
+        <span>Tamaño plantillas</span>
+        <input id="tpl-size" type="range" min="14" max="32" step="1" value="18" name="tpl-size" aria-label="Tamaño de las plantillas">
+      </div>
+      <div class="look-row">
+        <span>Tamaño del texto</span>
+        <input id="note-font" type="range" min="16" max="28" step="1" value="18" name="note-font" aria-label="Tamaño del texto">
+      </div>
+      <div class="look-row">
+        <span>Alto del renglón</span>
+        <input id="note-line" type="range" min="22" max="44" step="1" value="28" name="note-line" aria-label="Alto del renglón">
+      </div>
+      <div class="look-row">
+        <span>Ancho de la nota</span>
+        <input id="note-width" type="range" min="640" max="1100" step="20" value="920" name="note-width" aria-label="Ancho de la nota">
+      </div>
+      <div class="look-row">
+        <span>Tamaño de las tarjetas</span>
+        <input id="card-size" type="range" min="0" max="24" step="1" value="0" name="card-size" aria-label="Tamaño de las tarjetas">
+      </div>
+    </div>
+  </div>
+
+  <div id="template-modal" class="modal" hidden>
+    <div class="modal-card paper-card tpl-edit-card" role="dialog" aria-modal="true" aria-labelledby="tpl-heading">
+      <div class="modal-head look-head">
+        <h2 id="tpl-heading">Editar plantilla</h2>
+        <button type="button" id="tpl-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <label class="tpl-field">Nombre en la barra
+        <input id="tpl-label" type="text" autocomplete="off" name="tpl-label">
+      </label>
+      <label class="tpl-field">Título de la nota
+        <input id="tpl-title" type="text" autocomplete="off" name="tpl-title">
+      </label>
+      <label class="tpl-field">Texto
+        <textarea id="tpl-body" rows="4" name="tpl-body"></textarea>
+      </label>
+      <label class="info-switch tpl-math-switch">
+        <input id="tpl-math" name="tpl-math" type="checkbox">
+        Función matemática
+      </label>
+      <div class="modal-actions">
+        <button type="button" id="tpl-save" class="solid">Guardar plantilla</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="template-menu" class="note-menu" hidden role="menu">
+    <button type="button" data-tpl-action="color">Cambiar color</button>
+    <button type="button" data-tpl-action="order">Cambiar posición</button>
+    <button type="button" data-tpl-action="text">Cambiar título</button>
+    <button type="button" data-tpl-action="edit">Editar</button>
+    <button type="button" data-tpl-action="delete">Eliminar</button>
+  </div>
+
+  <div id="tpl-quick-modal" class="modal" hidden>
+    <div class="modal-card paper-card color-modal-card" role="dialog" aria-modal="true" aria-labelledby="tpl-quick-heading">
+      <div class="modal-head">
+        <h2 id="tpl-quick-heading">Plantilla</h2>
+        <button type="button" id="tpl-quick-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="color-picker-field" id="tpl-quick-color-field" hidden>
+        <input id="tpl-quick-color" type="color" value="#fff3c4" aria-label="Color" name="tpl-quick-color">
+        <input id="tpl-quick-hex" type="text" value="#fff3c4" maxlength="7" spellcheck="false" aria-label="Hexadecimal" name="tpl-quick-hex">
+      </div>
+      <div class="tpl-quick-field" id="tpl-quick-number-field" hidden>
+        <input id="tpl-quick-number" type="number" min="1" step="1" name="tpl-quick-number" aria-label="Posición">
+      </div>
+      <div class="tpl-quick-field" id="tpl-quick-text-field" hidden>
+        <input id="tpl-quick-text" type="text" autocomplete="off" name="tpl-quick-text" aria-label="Título">
+      </div>
+      <div class="modal-actions" id="tpl-quick-actions">
+        <button type="button" id="tpl-quick-save" class="solid">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="calendar-modal" class="modal" hidden>
+    <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="cal-heading">
+      <div class="modal-head">
+        <h2 id="cal-heading">Calendario</h2>
+        <button type="button" id="cal-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <div id="cal-upcoming" class="cal-upcoming"></div>
+      <p id="cal-lead" class="cal-lead"></p>
+      <label class="field-inline" id="cal-quick-wrap" hidden>Aviso rápido
+        <select id="cal-quick" name="cal-quick">
+          <option value="">Elegir</option>
+          <option value="10">Dentro de 10 min</option>
+          <option value="60">Dentro de 1 hora</option>
+          <option value="180">En 3 horas</option>
+          <option value="360">En 6 horas</option>
+          <option value="720">En 12 horas</option>
+          <option value="today18">Hoy 6:00 p. m.</option>
+          <option value="today20">Hoy 8:00 p. m.</option>
+          <option value="tomorrow">Mañana, misma hora</option>
+        </select>
+      </label>
+      <div id="cal-chips" class="chips light" hidden></div>
+      <div id="cal-schedule-options" class="schedule-options" hidden>
+        <label class="field-inline">Cuándo
+          <select id="cal-span" name="cal-span">
+            <option value="one">Un día</option>
+            <option value="picked">Días elegidos</option>
+            <option value="month">Todo el mes</option>
+            <option value="daily">Todos los días</option>
+            <option value="weekdays">Lunes a viernes</option>
+            <option value="monthly">Cada mes, este día</option>
+            <option value="interval">Cada ciertos días</option>
+          </select>
+        </label>
+        <label class="field-inline" id="cal-interval-wrap" hidden>Cada
+          <input id="cal-interval" type="number" min="1" max="365" value="7" name="cal-interval"> días
+        </label>
+        <label class="field-inline">Preaviso
+          <select id="cal-prealert" name="cal-prealert">
+            <option value="0">No</option>
+            <option value="5">5 min antes</option>
+            <option value="15">15 min antes</option>
+            <option value="30">30 min antes</option>
+          </select>
+        </label>
+      </div>
+      <p id="cal-conflict" class="cal-conflict" hidden></p>
+      <div class="postpone-nav">
+        <button type="button" id="cal-prev" aria-label="Mes anterior">‹</button>
+        <strong id="cal-month"></strong>
+        <button type="button" id="cal-next" aria-label="Mes siguiente">›</button>
+      </div>
+      <div class="weekdays" aria-hidden="true">
+        <span>lun</span><span>mar</span><span>mié</span><span>jue</span><span>vie</span><span>sáb</span><span>dom</span>
+      </div>
+      <div id="cal-grid" class="grid"></div>
+      <button type="button" id="cal-today" class="today-jump">Ir a hoy</button>
+      <label class="time-label" id="cal-time-wrap">
+        Hora
+        <span class="time-12" id="cal-time">
+          <select id="cal-hour" aria-label="Hora" name="cal-hour"></select>
+          <select id="cal-minute" aria-label="Minutos" name="cal-minute"></select>
+          <select id="cal-ampm" aria-label="a. m. o p. m." name="cal-ampm">
+            <option value="am">a. m.</option>
+            <option value="pm">p. m.</option>
+          </select>
+        </span>
+      </label>
+      <p id="cal-preview" class="preview dark"></p>
+      <ul id="cal-day-list" class="day-list"></ul>
+      <div class="modal-actions">
+        <button type="button" id="cal-confirm" class="solid hot" hidden>Programar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="alarm-modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="alarm-heading">
+      <p class="ring-kicker">Está sonando</p>
+      <h2 id="alarm-heading">Aviso</h2>
+      <p id="alarm-clock" class="alarm-clock"></p>
+      <p id="alarm-body" class="alarm-body"></p>
+      <p id="alarm-touch-hint" class="alarm-touch-hint" hidden>Toca la pantalla para parar el sonido</p>
+      <div id="postpone" class="postpone" hidden>
+        <p class="postpone-lead">Elige el día y la hora a la que pasa</p>
+        <div class="chips" id="post-chips">
+          <button type="button" data-quick="10">Dentro de 10 min</button>
+          <button type="button" data-quick="60">Dentro de 1 hora</button>
+          <button type="button" data-quick="tomorrow">Mañana, misma hora</button>
+        </div>
+        <div class="postpone-nav">
+          <button type="button" id="post-prev" aria-label="Mes anterior">‹</button>
+          <strong id="post-month"></strong>
+          <button type="button" id="post-next" aria-label="Mes siguiente">›</button>
+        </div>
+        <div class="weekdays mini" aria-hidden="true">
+          <span>lun</span><span>mar</span><span>mié</span><span>jue</span><span>vie</span><span>sáb</span><span>dom</span>
+        </div>
+        <div id="post-grid" class="grid mini"></div>
+        <label class="time-label">
+          Hora
+          <span class="time-12" id="post-time">
+            <select id="post-hour" aria-label="Hora" name="post-hour"></select>
+            <select id="post-minute" aria-label="Minutos" name="post-minute"></select>
+            <select id="post-ampm" aria-label="a. m. o p. m." name="post-ampm">
+              <option value="am">a. m.</option>
+              <option value="pm">p. m.</option>
+            </select>
+          </span>
+        </label>
+        <p id="post-preview" class="preview"></p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-done" class="solid light">Hecho</button>
+        <button type="button" id="btn-snooze" class="solid hot">Posponer</button>
+        <button type="button" id="btn-confirm" class="solid hot" hidden>Posponer a esta fecha</button>
+        <button type="button" id="btn-mute" class="ghost on-dark">Silenciar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="order-modal" class="modal" hidden>
+    <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="order-heading">
+      <div class="modal-head">
+        <h2 id="order-heading">Cambiar orden</h2>
+        <button type="button" id="order-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <p id="order-lead" class="color-note-title"></p>
+      <label class="tpl-field">Número
+        <input id="order-input" type="number" min="1" step="1" name="order-input">
+      </label>
+      <div class="modal-actions">
+        <button type="button" id="order-save" class="solid">Reorganizar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="master-modal" class="modal" hidden>
+    <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="master-heading">
+      <div class="modal-head">
+        <h2 id="master-heading">Contraseña maestra</h2>
+        <button type="button" id="master-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <p id="master-lead" class="color-note-title"></p>
+      <form id="master-form" name="master-form" onsubmit="return false">
+      <input class="sr" type="text" id="master-user" name="username" autocomplete="username" tabindex="-1">
+      <label class="tpl-field" id="master-pass-field">Contraseña
+        <span class="pass-field">
+          <input id="master-pass" type="password" autocomplete="new-password" name="master-pass">
+          <button type="button" class="pass-eye" data-pass-toggle="master-pass" aria-label="Mostrar contraseña" aria-pressed="false">
+            <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </span>
+      </label>
+      <label class="tpl-field" id="master-pass2-field" hidden>Repite la contraseña
+        <span class="pass-field">
+          <input id="master-pass2" type="password" autocomplete="new-password" name="master-pass2">
+          <button type="button" class="pass-eye" data-pass-toggle="master-pass2" aria-label="Mostrar contraseña" aria-pressed="false">
+            <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </span>
+      </label>
+      <label class="tpl-field" id="master-code-field" hidden>Código del correo
+        <input id="master-code" inputmode="numeric" autocomplete="one-time-code" name="master-code">
+      </label>
+      <p id="master-error" class="cal-conflict" hidden></p>
+      <div class="modal-actions">
+        <button type="button" id="master-ok" class="solid">Continuar</button>
+        <button type="button" id="master-forgot" class="ghost">Olvidé la contraseña</button>
+      </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="master-change-modal" class="modal" hidden>
+    <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="master-change-heading">
+      <div class="modal-head">
+        <h2 id="master-change-heading">Cambiar contraseña maestra</h2>
+        <button type="button" id="master-change-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="master-change-form" name="master-change-form" class="login-field-stack" onsubmit="return false">
+        <input class="sr" type="text" id="master-change-user" name="username" autocomplete="username" tabindex="-1">
+        <div class="pass-field">
+          <input id="master-old" type="password" autocomplete="current-password" placeholder="Contraseña antigua" aria-label="Contraseña antigua" name="master-old">
+          <button type="button" class="pass-eye" data-pass-toggle="master-old" aria-label="Mostrar contraseña" aria-pressed="false">
+            <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="pass-field">
+          <input id="master-new" type="password" autocomplete="new-password" placeholder="Contraseña nueva" aria-label="Contraseña nueva" name="master-new">
+          <button type="button" class="pass-eye" data-pass-toggle="master-new" aria-label="Mostrar contraseña" aria-pressed="false">
+            <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="pass-field">
+          <input id="master-new2" type="password" autocomplete="new-password" placeholder="Repetir contraseña nueva" aria-label="Repetir contraseña nueva" name="master-new2">
+          <button type="button" class="pass-eye" data-pass-toggle="master-new2" aria-label="Mostrar contraseña" aria-pressed="false">
+            <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <p id="master-change-error" class="cal-conflict" hidden></p>
+        <button type="button" id="master-change-save" class="solid">Guardar contraseña maestra</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="logout-modal" class="modal" hidden>
+    <div class="modal-card paper-card info-card" role="dialog" aria-modal="true" aria-labelledby="logout-heading">
+      <div class="modal-head look-head">
+        <h2 id="logout-heading">¿Estás seguro?</h2>
+        <button type="button" id="logout-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <p class="info-text">Elige dónde cerrar la sesión.</p>
+      <div class="modal-actions">
+        <button type="button" class="ghost" data-logout="device">Este dispositivo</button>
+        <button type="button" class="ghost" data-logout="all">Todos los dispositivos</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="close-account-modal" class="modal" hidden>
+    <div class="modal-card paper-card info-card" role="dialog" aria-modal="true" aria-labelledby="close-account-heading">
+      <div class="modal-head look-head">
+        <h2 id="close-account-heading">¿Estás seguro?</h2>
+        <button type="button" id="close-account-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <p class="info-text">Se pierde todo lo guardado: notas, copias y sesiones. Si tienes una suscripción, también se pierden los pagos ya hechos y los días que te queden. Te enviaremos un correo avisando del cierre.</p>
+      <div class="modal-actions">
+        <button type="button" id="close-account-cancel" class="ghost">Cancelar</button>
+        <button type="button" id="close-account-confirm" class="solid">Cerrar mi cuenta</button>
+      </div>
+      <p id="close-account-note" class="cal-conflict" hidden></p>
+    </div>
+  </div>
+
+  <div id="user-edit-modal" class="modal" hidden>
+    <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="user-edit-heading">
+      <div class="modal-head look-head">
+        <h2 id="user-edit-heading">Editar usuario</h2>
+        <button type="button" id="user-edit-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="user-edit-form" name="user-edit-form" class="login-field-stack" onsubmit="return false">
+        <input id="user-edit-name" type="text" name="username" autocomplete="username" placeholder="Usuario" aria-label="Usuario">
+        <input id="user-edit-mail" type="email" autocomplete="off" name="user-edit-mail" placeholder="Correo" aria-label="Correo">
+        <div class="pass-super-row">
+          <input id="user-edit-pass" type="password" autocomplete="new-password" placeholder="Contraseña nueva" aria-label="Contraseña nueva" name="user-edit-pass">
+          <label class="tpl-field" id="user-edit-role-field">Tipo
+            <select id="user-edit-role" name="user-edit-role" aria-label="Tipo de usuario">
+              <option value="registro">Registro</option>
+              <option value="super">Super</option>
+            </select>
+          </label>
+        </div>
+        <input id="user-edit-balance" type="text" inputmode="decimal" autocomplete="off" placeholder="Sumar saldo" aria-label="Sumar saldo" name="user-edit-balance">
+        <label class="info-switch"><input id="user-edit-negative" type="checkbox" name="user-edit-negative"> Puede quedar con saldo negativo</label>
+        <label class="info-switch"><input id="user-edit-permanent" type="checkbox" name="user-edit-permanent"> Permanente, sin cobro</label>
+        <p id="user-edit-error" class="cal-conflict" hidden></p>
+        <button type="button" id="user-edit-save" class="solid">Guardar</button>
+      </form>
+    </div>
+  </div>
+
+  <section id="account-modal" class="account-page" hidden>
+    <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="account-heading">
+      <div class="modal-head">
+        <h2 id="account-heading">Cuenta</h2>
+        <button type="button" id="account-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <div id="account-guest">
+        <div class="login-brand">
+          <span class="login-mark" aria-hidden="true">
+            <svg viewBox="0 0 64 64" width="52" height="52">
+              <rect x="10" y="8" width="40" height="48" rx="8" fill="#fffdf8" stroke="#c4562a" stroke-width="2.4"/>
+              <path d="M36 9.2 49.8 23H40a4 4 0 0 1-4-4V9.2z" fill="#ffd4ae"/>
+              <path d="M20 30h20M20 37h20M20 44h12" stroke="#c4562a" stroke-width="2.3" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <p class="login-logo">tupremiumm notas</p>
+        </div>
+        <div class="login-panel">
+        <form id="account-form" name="account-form">
+          <h2 class="login-panel-title">Iniciar sesión</h2>
+          <div class="login-field-stack">
+            <input id="account-id" type="text" autocomplete="username" placeholder="Correo o usuario" aria-label="Correo o usuario" name="account-id">
+            <div class="pass-field">
+              <input id="account-pass" type="password" autocomplete="current-password" required minlength="6" placeholder="Contraseña" aria-label="Contraseña" name="account-pass">
+              <button type="button" class="pass-eye" data-pass-toggle="account-pass" aria-label="Mostrar contraseña" aria-pressed="false">
+                <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+                <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="login-actions">
+            <button type="submit" class="solid" id="account-submit">Iniciar sesión</button>
+          </div>
+          <p id="account-error" class="cal-conflict" hidden></p>
+        </form>
+        <button type="button" id="recover-toggle" class="login-forgot">¿Olvidaste la contraseña?</button>
+        <div id="recover-fields" class="login-extra" hidden>
+          <form id="recover-form" name="recover-form">
+            <input id="recover-id" type="text" autocomplete="username" placeholder="Correo o usuario" aria-label="Correo o usuario para recuperar" name="recover-id">
+            <div class="login-actions">
+              <button type="submit" class="ghost">Enviar enlace</button>
+            </div>
+            <p id="recover-note" class="color-note-title" hidden></p>
+          </form>
+        </div>
+        </div>
+        <button type="button" id="create-toggle" class="login-panel-title login-panel-title--btn">Crear usuario</button>
+        <form id="create-form" name="create-form" class="login-panel" hidden>
+          <div class="login-field-stack">
+            <input id="create-user" type="text" autocomplete="username" required placeholder="Usuario" aria-label="Usuario" name="create-user">
+            <input id="create-mail" type="email" autocomplete="email" required placeholder="Correo" aria-label="Correo" name="create-mail">
+            <div class="pass-field">
+              <input id="create-pass" type="password" autocomplete="new-password" required minlength="6" placeholder="Contraseña" aria-label="Contraseña" name="create-pass">
+              <button type="button" class="pass-eye" data-pass-toggle="create-pass" aria-label="Mostrar contraseña" aria-pressed="false">
+                <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+                <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <div class="pass-field">
+              <input id="create-pass2" type="password" autocomplete="new-password" required minlength="6" placeholder="Repetir contraseña" aria-label="Repetir contraseña" name="create-pass2">
+              <button type="button" class="pass-eye" data-pass-toggle="create-pass2" aria-label="Mostrar contraseña" aria-pressed="false">
+                <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+                <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="login-actions">
+            <button type="submit" class="solid">Crear usuario</button>
+          </div>
+          <p id="create-error" class="cal-conflict" hidden></p>
+        </form>
+        <form id="reset-form" name="reset-form" hidden>
+          <input class="sr" type="text" id="reset-user" name="username" autocomplete="username" tabindex="-1">
+          <p class="color-note-title">Elige la contraseña nueva.</p>
+          <label class="tpl-field">Contraseña nueva
+            <input id="reset-pass" type="password" autocomplete="new-password" required minlength="6" name="reset-pass">
+          </label>
+          <div class="modal-actions">
+            <button type="submit" class="solid">Guardar contraseña</button>
+          </div>
+          <p id="reset-note" class="color-note-title" hidden></p>
+        </form>
+      </div>
+      <div id="account-in" hidden>
+        <p id="account-sync" class="color-note-title" hidden></p>
+        <p id="lan-hint" class="color-note-title lan-hint" hidden></p>
+        <div class="account-block">
+          <p id="account-balance" class="pay-balance">Saldo $0</p>
+          <p id="account-until" class="color-note-title"></p>
+          <form id="coupon-redeem" name="coupon-redeem" class="login-field-stack">
+            <input id="coupon-code" name="coupon-code" type="text" autocomplete="off" placeholder="Código del cupón" aria-label="Código del cupón">
+            <button type="submit" class="solid">Canjear cupón</button>
+            <p id="coupon-note" class="color-note-title" hidden></p>
+          </form>
+        </div>
+        <div class="account-block">
+          <div id="account-admin" hidden>
+            <h3>Usuarios</h3>
+          <div class="user-tools">
+            <label class="info-switch"><input id="user-debt" name="user-debt" type="checkbox"> Saldo negativo</label>
+            <label class="search-wrap">
+              <span class="sr">Buscar usuario</span>
+              <input id="user-search" name="user-search" type="search" placeholder="Buscar usuario" autocomplete="off">
+              <button type="button" id="user-search-clear" class="search-clear" hidden aria-label="Borrar búsqueda">✕</button>
+            </label>
+            <select id="user-size" name="user-size" aria-label="Cuántos usuarios">
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="0">Todos</option>
+            </select>
+          </div>
+          <ul id="user-list" class="user-rows"></ul>
+          <div class="user-pager">
+            <button type="button" id="user-prev" class="solid">Anterior</button>
+            <span id="user-page">Página 1 de 1</span>
+            <button type="button" id="user-next" class="solid">Siguiente</button>
+          </div>
+          <div class="admin-only">
+          <h3>Crear cupón</h3>
+          <form id="coupon-create" name="coupon-create" class="login-field-stack">
+            <input id="coupon-amount" name="coupon-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="Saldo del cupón" aria-label="Saldo del cupón">
+            <input id="coupon-custom" name="coupon-custom" type="text" autocomplete="off" placeholder="Código, opcional" aria-label="Código del cupón">
+            <button type="submit" class="solid">Crear cupón</button>
+            <p id="coupon-create-note" class="color-note-title" hidden></p>
+          </form>
+          <ul id="coupon-list" class="pay-list"></ul>
+          </div>
+          <h3>Crear usuario</h3>
+          <form id="admin-create" name="admin-create" class="login-field-stack">
+            <input id="admin-user" name="admin-user" type="text" required placeholder="Usuario" aria-label="Usuario" autocomplete="username">
+            <input id="admin-mail" name="admin-mail" type="email" required placeholder="Correo" aria-label="Correo" autocomplete="off">
+            <div class="pass-super-row">
+              <div class="pass-field">
+                <input id="admin-pass" name="admin-pass" type="password" required minlength="6" placeholder="Contraseña" aria-label="Contraseña" autocomplete="new-password">
+                <button type="button" class="pass-eye" data-pass-toggle="admin-pass" aria-label="Mostrar contraseña" aria-pressed="false">
+                  <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+                  <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                </button>
+              </div>
+              <label class="info-switch admin-only">
+                <input id="admin-super" name="admin-super" type="checkbox">
+                Super usuario
+              </label>
+            </div>
+            <button type="submit" class="solid">Crear usuario</button>
+            <p id="admin-create-note" class="color-note-title" hidden></p>
+          </form>
+          </div>
+        </div>
+        <div class="account-block">
+          <div class="section-line">
+            <h3>Copias de seguridad</h3>
+            <span class="backup-actions">
+              <button type="button" id="backup-import" class="ghost">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 4.4v11.1"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M8.2 11.7 12 15.5l3.8-3.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M5 14.2h14v5.4H5z"/></svg>
+                Importar copia
+              </button>
+              <button type="button" id="backup-create" class="solid">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 15.5V4.4"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M8.2 8.2 12 4.4l3.8 3.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M5 14.2h14v5.4H5z"/></svg>
+                Crear copia
+              </button>
+            </span>
+          </div>
+          <ul id="account-backups" class="backup-list"></ul>
+        </div>
+        <div class="account-block">
+          <h3>Contraseña maestra</h3>
+          <p class="color-note-title">Sirve para las notas protegidas. Se crea una sola vez.</p>
+          <div class="modal-actions">
+            <button type="button" id="master-create-account" class="solid">Crear contraseña maestra</button>
+            <button type="button" id="master-change-account" class="ghost" hidden>Cambiar contraseña maestra</button>
+          </div>
+        </div>
+        <div class="account-block">
+        <h3>Cambiar contraseña</h3>
+        <form id="password-form" name="password-form" class="login-field-stack">
+          <input class="sr" type="text" id="password-user" name="username" autocomplete="username" tabindex="-1">
+          <div class="pass-field">
+            <input id="password-current" type="password" autocomplete="current-password" required placeholder="Contraseña actual" aria-label="Contraseña actual" name="password-current">
+            <button type="button" class="pass-eye" data-pass-toggle="password-current" aria-label="Mostrar contraseña" aria-pressed="false">
+              <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+              <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <div class="pass-field">
+            <input id="password-next" type="password" autocomplete="new-password" required minlength="6" placeholder="Contraseña nueva" aria-label="Contraseña nueva" name="password-next">
+            <button type="button" class="pass-eye" data-pass-toggle="password-next" aria-label="Mostrar contraseña" aria-pressed="false">
+              <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+              <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <div class="pass-field">
+            <input id="password-again" type="password" autocomplete="new-password" required minlength="6" placeholder="Repetir contraseña" aria-label="Repetir contraseña" name="password-again">
+            <button type="button" class="pass-eye" data-pass-toggle="password-again" aria-label="Mostrar contraseña" aria-pressed="false">
+              <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+              <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <button type="submit" class="solid">Guardar contraseña</button>
+          <p id="password-note" class="color-note-title" hidden></p>
+        </form>
+        <div class="modal-actions">
+          <button type="button" id="account-out" class="ghost">Cerrar sesión</button>
+          <button type="button" id="account-delete" class="ghost">Cerrar mi cuenta</button>
+        </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pay-page" class="account-page" hidden>
+    <div class="account-block">
+      <h3>Pagos</h3>
+      <p id="pay-balance" class="pay-balance">Saldo $0</p>
+      <p id="pay-until" class="color-note-title"></p>
+      <div id="plan-box" class="plan-box">
+        <h3 id="plan-name">Bloc</h3>
+        <p id="plan-copy"></p>
+        <div id="plan-periods" class="plan-periods"></div>
+        <button type="button" id="plan-use-balance" class="solid">Activar con saldo</button>
+      </div>
+      <form id="pay-form" name="pay-form">
+        <div id="pay-methods" class="pay-methods" role="radiogroup" aria-label="Medio de pago"></div>
+        <input id="pay-amount" name="pay-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="Monto transferido" aria-label="Monto transferido">
+        <label class="pay-file">
+          <input id="pay-proof" name="pay-proof" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+          <span id="pay-proof-name">Pantallazo de la transferencia</span>
+        </label>
+        <button type="submit" class="solid">Enviar solicitud</button>
+        <p id="pay-note" class="color-note-title" hidden></p>
+      </form>
+    </div>
+    <div class="account-block">
+      <div class="section-line">
+        <h3>Mis solicitudes</h3>
+        <select id="pay-filter" name="pay-filter" aria-label="Filtrar solicitudes">
+          <option value="all">Todas</option>
+          <option value="pending">Pendientes</option>
+          <option value="approved">Aprobadas</option>
+          <option value="rejected">Rechazadas</option>
+        </select>
+      </div>
+      <ul id="pay-list" class="pay-list"></ul>
+    </div>
+    <div id="pay-admin" class="account-block" hidden>
+      <h3>Revisión de pagos</h3>
+      <div class="pay-tabs">
+        <button type="button" data-pay-tab="pending" aria-pressed="true">Consignaciones</button>
+        <button type="button" data-pay-tab="approved" aria-pressed="false">Acreditadas</button>
+        <button type="button" data-pay-tab="methods" aria-pressed="false">Medios de pago</button>
+      </div>
+      <ul id="pay-review" class="pay-list"></ul>
+      <div id="pay-methods-editor" hidden>
+        <div id="pay-method-rows"></div>
+        <button type="button" id="pay-method-add" class="ghost">Añadir medio</button>
+        <button type="button" id="pay-method-save" class="solid">Guardar medios</button>
+        <p id="pay-method-note" class="color-note-title" hidden></p>
+      </div>
+    </div>
+  </section>
+
+  <script src="js/app.js?v=90"></script>
+  <script src="js/features.js?v=83"></script>
+  <script src="js/account.js?v=68"></script>
+  <script>
+    if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
+      navigator.serviceWorker.register("sw.js").catch(function () {});
+    }
+  </script>
+  <script src="js/payments.js?v=4"></script>
+  <script src="js/spend.js?v=17"></script>
+</body>
+</html>

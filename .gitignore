@@ -1,0 +1,10 @@
+.env
+data/
+__pycache__/
+*.pyc
+git_subir_y_actualizar.txt
+servidor_bloc.txt
+mobile-android-native/
+*.jks
+*.apk
+*.aab
