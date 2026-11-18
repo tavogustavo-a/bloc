@@ -112,9 +112,12 @@
   }
 
   function accessText() {
-    if (data?.admin) return "Admin, sin cobro.";
+    if (data?.admin) return "";
     if (data?.permanent) return "Permanente, sin cobro.";
-    if (Number(data?.until) > Date.now()) return `Activo hasta ${when(data.until)}`;
+    if (Number(data?.until) > Date.now()) {
+      const listed = Number(data?.listed) ? ` · $${Math.round(Number(data.listed)).toLocaleString("es-CO")}` : "";
+      return `Activo hasta ${when(data.until)}${listed}`;
+    }
     return "Sin suscripción activa.";
   }
 
@@ -128,7 +131,10 @@
     });
     ["pay-until", "account-until"].forEach((id) => {
       const el = document.getElementById(id);
-      if (el) el.textContent = accessText();
+      if (el) {
+        el.textContent = accessText();
+        el.hidden = !el.textContent;
+      }
     });
     const copy = document.getElementById("plan-copy");
     if (copy) copy.textContent = data?.plan?.description || "";
@@ -305,6 +311,17 @@
 
   document.getElementById("plan-go-pay")?.addEventListener("click", () => window.openBlocPay());
 
+  async function redeemCoupon(code, say, clear) {
+    if (!session()?.token) {
+      say("Entra a la cuenta para canjear el cupón.", true);
+      window.openBlocAccount?.();
+      return;
+    }
+    await send("/api/coupons/redeem", { code });
+    clear();
+    say("Cupón canjeado. El saldo ya está en la cuenta.");
+  }
+
   document.getElementById("coupon-redeem")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const box = document.getElementById("coupon-note");
@@ -315,9 +332,27 @@
       box.style.color = bad ? "#9a3412" : "";
     };
     try {
-      await send("/api/coupons/redeem", { code: document.getElementById("coupon-code")?.value || "" });
-      document.getElementById("coupon-code").value = "";
-      say("Cupón canjeado. El saldo ya está en la cuenta.");
+      await redeemCoupon(document.getElementById("coupon-code")?.value || "", say, () => {
+        document.getElementById("coupon-code").value = "";
+      });
+    } catch (error) {
+      say(error.message, true);
+    }
+  });
+
+  document.getElementById("menu-coupon")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const box = document.getElementById("menu-coupon-note");
+    const say = (text, bad) => {
+      if (!box) return;
+      box.hidden = !text;
+      box.textContent = text || "";
+      box.style.color = bad ? "#9a3412" : "";
+    };
+    try {
+      await redeemCoupon(document.getElementById("menu-coupon-code")?.value || "", say, () => {
+        document.getElementById("menu-coupon-code").value = "";
+      });
     } catch (error) {
       say(error.message, true);
     }

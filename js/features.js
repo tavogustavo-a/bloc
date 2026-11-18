@@ -382,7 +382,6 @@
         closeAppMenu();
         return;
       }
-      const r = e.currentTarget.getBoundingClientRect();
       const role = (() => { try { return JSON.parse(localStorage.getItem("bloc-cuenta") || "null")?.role; } catch { return ""; } })();
       const cuenta = appMenu.querySelector("#btn-account .info-ico");
       if (cuenta) {
@@ -393,12 +392,9 @@
             : "Entra a la cuenta y cambia la contraseña.";
       }
       appMenu.hidden = false;
-      const width = window.innerWidth <= 700
-        ? Math.min(250, window.innerWidth - 24)
-        : Math.min(420, window.innerWidth - 16);
-      appMenu.style.width = `${width}px`;
-      appMenu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - width - 8))}px`;
-      appMenu.style.top = `${r.bottom + 8}px`;
+      appMenu.style.width = "";
+      appMenu.style.left = "0";
+      appMenu.style.top = "0";
       document.body.classList.add("app-menu-open");
       e.currentTarget.setAttribute("aria-expanded", "true");
     });
@@ -841,6 +837,15 @@
     });
 
     document.getElementById("tpl-close")?.addEventListener("click", closeTemplateEditor);
+    document.getElementById("tpl-math")?.addEventListener("change", (e) => {
+      const bloc = B();
+      const id = document.getElementById("template-modal")?.dataset.tplId;
+      const tpl = bloc?.state?.templates?.[id];
+      if (!tpl) return;
+      tpl.math = e.target.checked;
+      bloc.save();
+      bloc.render();
+    });
     document.getElementById("tpl-save")?.addEventListener("click", () => {
       const modal = document.getElementById("template-modal");
       const id = modal?.dataset.tplId;
@@ -866,6 +871,7 @@
       bloc.save();
       closeTemplateEditor();
       renderTemplateBar();
+      bloc.render();
     });
     document.getElementById("template-modal")?.addEventListener("pointerdown", (e) => {
       if (e.target.id === "template-modal") closeTemplateEditor();

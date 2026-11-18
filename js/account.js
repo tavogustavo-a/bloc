@@ -34,9 +34,15 @@
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   }
 
+  function backupStorageKey() {
+    const current = session();
+    const who = (current?.email || current?.username || "").toLowerCase();
+    return who ? `${BACKUP_KEY}:${who}` : BACKUP_KEY;
+  }
+
   function backups() {
     try {
-      const data = JSON.parse(localStorage.getItem(BACKUP_KEY) || "[]");
+      const data = JSON.parse(localStorage.getItem(backupStorageKey()) || "[]");
       return Array.isArray(data) ? data : [];
     } catch {
       return [];
@@ -59,7 +65,7 @@
     const manuals = all.filter((item) => item.manual).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)).slice(0, 10);
     const daily = all.filter((item) => !item.manual).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
     const next = [...manuals, ...daily].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
-    localStorage.setItem(BACKUP_KEY, JSON.stringify(next));
+    localStorage.setItem(backupStorageKey(), JSON.stringify(next));
     return next;
   }
 
@@ -131,7 +137,12 @@
     const admin = document.getElementById("account-admin");
     const staff = current?.role === "admin" || current?.role === "super";
     if (admin) admin.hidden = !staff;
-    document.querySelectorAll(".admin-only").forEach((item) => { item.hidden = current?.role !== "admin"; });
+    const deleteAccount = document.getElementById("account-delete");
+    if (deleteAccount) {
+      const blocked = current?.role === "admin";
+      deleteAccount.disabled = blocked;
+      deleteAccount.title = blocked ? "El administrador no puede cerrar esta cuenta." : "";
+    }
     if (staff) loadUsers();
     window.refreshBlocPlan?.();
     syncGate();
@@ -344,18 +355,23 @@
       const parent = user.parent ? `<small class="user-parent">de ${String(user.parent).replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[char]))}</small>` : "";
       const kind = user.role === "super"
         ? `<small class="user-parent">super</small>`
-        : user.role === "registro"
-          ? `<small class="user-parent">registro</small>`
-          : "";
+        : user.role === "google"
+          ? `<small class="user-parent">google</small>`
+          : user.role === "registro"
+            ? `<small class="user-parent">registro</small>`
+            : "";
       const manage = session()?.role === "admin";
       const boss = manage || session()?.role === "super";
       const saldo = `$${Math.round(Number(user.balance) || 0).toLocaleString("es-CO")}`;
-      const credit = boss ? `<form class="user-credit" data-credit-form="${user.id}"><input id="credit-${user.id}" name="credit-${user.id}" type="text" inputmode="decimal" placeholder="Sumar saldo" aria-label="Sumar saldo" autocomplete="off"><button type="submit" class="solid tiny">Sumar</button></form>` : "";
+      const prices = user.listed
+        ? `<small class="user-parent">Ve $${Math.round(user.listed).toLocaleString("es-CO")}${user.charged && user.charged !== user.listed ? ` · interno $${Math.round(user.charged).toLocaleString("es-CO")}` : ""}</small>`
+        : "";
+      const credit = boss ? `<button type="button" class="user-ico user-ico-credit" data-user-credit="${user.id}" aria-label="Sumar saldo"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><text x="2" y="16" fill="#fff" font-size="11" font-family="sans-serif">$</text><path fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" d="M16 7v10M11 12h10"/></svg></button>` : "";
       const tools = manage ? `<button type="button" class="switch${on ? " is-on" : ""}" data-user-active="${user.id}" data-username="${user.username || ""}" data-email="${user.email || ""}" aria-pressed="${on}" aria-label="${on ? "Desactivar" : "Activar"}" ${self ? "disabled" : ""}></button>
         <button type="button" class="user-ico" data-user-edit="${user.id}" data-role="${user.role || "user"}" data-username="${user.username || ""}" data-email="${user.email || ""}" data-negative="${user.allowNegative ? "1" : "0"}" data-permanent="${user.permanent ? "1" : "0"}" aria-label="Editar"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 16.5 15.2 5.3a1.8 1.8 0 0 1 2.5 0l1 1a1.8 1.8 0 0 1 0 2.5L7.5 20H4v-3.5z"/></svg></button>
         <button type="button" class="user-ico user-ico-delete" data-user-delete="${user.id}" aria-label="Eliminar" ${self ? "disabled" : ""}><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M5 7.4h14"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M9.2 7.2V5.4h5.6v1.8"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M7.4 7.4 8.3 19h7.4l.9-11.6"/></svg></button>` : "";
       return `<li class="user-row">
-        <span class="user-name">${name}${kind}${parent}<small class="user-parent">Saldo ${saldo}</small></span>
+        <span class="user-name">${name}${kind}${parent}<small class="user-parent">Saldo ${saldo}</small>${prices}</span>
         ${credit}
         ${tools}
       </li>`;
@@ -400,7 +416,7 @@
     if (apiBloc) {
       apiBloc.applyRemoteState({ files: [], alarms: [], templates: {}, templateLook: { layout: "titles", size: 22 } });
     }
-    localStorage.removeItem(BACKUP_KEY);
+    localStorage.removeItem(backupStorageKey());
     setRev(0);
     saveSession(null);
     pending = false;
@@ -413,23 +429,22 @@
   }
 
   async function logout(scope) {
-    if (scope === "all" && !online()) {
-      accountNotice("Sin internet no se puede cerrar la sesión en los demás equipos.");
-      return;
-    }
+    const note = document.getElementById("logout-note");
+    const say = (text) => { if (note) { note.hidden = !text; note.textContent = text || ""; } };
     try {
-      if (online()) await api("/api/logout", { method: "POST", body: JSON.stringify({ scope }) });
-      else if (scope === "all") return;
+      await api("/api/logout", { method: "POST", body: JSON.stringify({ scope }) });
     } catch (error) {
       if (scope === "all") {
-        accountNotice(error.message || "No se pudo cerrar la sesión en los demás equipos.");
+        say(error.message === "Failed to fetch" ? "No hay conexión con el servidor." : (error.message || "No se pudo cerrar la sesión en los demás equipos."));
         return;
       }
     }
     saveSession(null);
     pending = false;
-    const ask = document.getElementById("logout-ask");
-    if (ask) ask.hidden = true;
+    document.body.classList.remove("account-open");
+    say("");
+    const modal = document.getElementById("logout-modal");
+    if (modal) modal.hidden = true;
     renderAccount();
   }
 
@@ -449,17 +464,41 @@
     button.setAttribute("aria-pressed", show ? "true" : "false");
     button.setAttribute("aria-label", show ? "Ocultar contraseña" : "Mostrar contraseña");
   });
+  function closeRecover() {
+    const modal = document.getElementById("recover-modal");
+    if (modal) modal.hidden = true;
+  }
   document.getElementById("recover-toggle")?.addEventListener("click", () => {
-    const box = document.getElementById("recover-fields");
-    if (!box) return;
-    box.hidden = !box.hidden;
-    if (!box.hidden) document.getElementById("recover-id")?.focus();
+    const modal = document.getElementById("recover-modal");
+    const note = document.getElementById("recover-note");
+    if (modal) modal.hidden = false;
+    if (note) note.hidden = true;
+    document.getElementById("recover-id")?.focus();
+  });
+  document.getElementById("recover-close")?.addEventListener("click", closeRecover);
+  document.getElementById("recover-cancel")?.addEventListener("click", closeRecover);
+  document.getElementById("recover-modal")?.addEventListener("click", (event) => {
+    if (event.target.id === "recover-modal") closeRecover();
   });
   document.getElementById("create-toggle")?.addEventListener("click", () => {
-    const form = document.getElementById("create-form");
-    if (!form) return;
-    form.hidden = !form.hidden;
-    if (!form.hidden) document.getElementById("create-user")?.focus();
+    const modal = document.getElementById("create-modal");
+    const note = document.getElementById("create-error");
+    if (modal) modal.hidden = false;
+    if (note) note.hidden = true;
+    document.getElementById("create-user")?.focus();
+  });
+  document.getElementById("create-close")?.addEventListener("click", () => {
+    const modal = document.getElementById("create-modal");
+    if (modal) modal.hidden = true;
+  });
+  document.getElementById("create-cancel")?.addEventListener("click", () => {
+    const modal = document.getElementById("create-modal");
+    if (modal) modal.hidden = true;
+  });
+  document.getElementById("create-modal")?.addEventListener("click", (event) => {
+    if (event.target.id === "create-modal") {
+      document.getElementById("create-modal").hidden = true;
+    }
   });
   document.getElementById("account-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -560,12 +599,12 @@
   document.getElementById("logout-close")?.addEventListener("click", () => {
     document.getElementById("logout-modal").hidden = true;
   });
-  document.getElementById("logout-modal")?.addEventListener("click", (event) => {
-    if (event.target.id === "logout-modal") event.currentTarget.hidden = true;
-    const scope = event.target.closest("[data-logout]")?.dataset.logout;
-    if (!scope) return;
-    document.getElementById("logout-modal").hidden = true;
-    logout(scope);
+  document.querySelectorAll("[data-logout]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      logout(button.dataset.logout);
+    });
   });
   document.getElementById("account-delete")?.addEventListener("click", () => {
     const note = document.getElementById("close-account-note");
@@ -656,14 +695,29 @@
     event.preventDefault();
     const note = document.getElementById("admin-create-note");
     const say = (text) => { if (note) { note.hidden = !text; note.textContent = text || ""; } };
+    const username = document.getElementById("admin-user").value.trim();
+    const email = document.getElementById("admin-mail").value.trim();
+    const password = document.getElementById("admin-pass").value;
+    const missing = [];
+    if (!username) missing.push("el usuario");
+    if (!email) missing.push("el correo");
+    if (!password) missing.push("la contraseña");
+    if (missing.length) {
+      say(`Falta ${missing.join(", ")}.`);
+      return;
+    }
+    if (password.length < 6) {
+      say("La contraseña necesita al menos 6 caracteres.");
+      return;
+    }
     try {
       await api("/api/users/create", {
         method: "POST",
         body: JSON.stringify({
-          username: document.getElementById("admin-user").value.trim(),
-          email: document.getElementById("admin-mail").value.trim(),
-          password: document.getElementById("admin-pass").value,
-          super: Boolean(document.getElementById("admin-super")?.checked),
+          username,
+          email,
+          password,
+          role: document.getElementById("admin-kind")?.value || "registro",
         }),
       });
       document.getElementById("admin-create").reset();
@@ -673,21 +727,47 @@
       say(error.message || "No se pudo crear el usuario.");
     }
   });
-  document.getElementById("user-debt")?.addEventListener("change", paintUsers);
-  document.getElementById("user-list")?.addEventListener("submit", async (event) => {
-    const form = event.target.closest("[data-credit-form]");
-    if (!form) return;
+  function closeCredit() {
+    const modal = document.getElementById("user-credit-modal");
+    if (modal) modal.hidden = true;
+  }
+  document.getElementById("user-credit-close")?.addEventListener("click", closeCredit);
+  document.getElementById("user-credit-cancel")?.addEventListener("click", closeCredit);
+  document.getElementById("user-credit-modal")?.addEventListener("click", (event) => {
+    if (event.target.id === "user-credit-modal") closeCredit();
+  });
+  document.getElementById("user-credit-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const amount = form.querySelector("input")?.value || "";
+    const modal = document.getElementById("user-credit-modal");
+    const note = document.getElementById("user-credit-error");
+    const amount = document.getElementById("user-credit-amount")?.value || "";
     try {
-      await api("/api/users/credit", { method: "POST", body: JSON.stringify({ id: form.dataset.creditForm, amount }) });
-      form.querySelector("input").value = "";
+      await api("/api/users/credit", { method: "POST", body: JSON.stringify({ id: modal?.dataset.userId, amount }) });
+      if (note) note.hidden = true;
+      closeCredit();
       loadUsers();
     } catch (error) {
-      accountNotice(error.message || "No se pudo sumar el saldo.");
+      if (note) {
+        note.hidden = false;
+        note.textContent = error.message || "No se pudo sumar el saldo.";
+      }
     }
   });
   document.getElementById("user-list")?.addEventListener("click", async (event) => {
+    const credit = event.target.closest("[data-user-credit]");
+    if (credit) {
+      const modal = document.getElementById("user-credit-modal");
+      const input = document.getElementById("user-credit-amount");
+      const note = document.getElementById("user-credit-error");
+      if (modal) {
+        modal.dataset.userId = credit.dataset.userCredit;
+        modal.hidden = false;
+      }
+      if (input) input.value = "";
+      if (note) note.hidden = true;
+      input?.focus();
+      return;
+    }
     const toggle = event.target.closest("[data-user-active]");
     const edit = event.target.closest("[data-user-edit]");
     const remove = event.target.closest("[data-user-delete]");
@@ -723,7 +803,15 @@
       const permanent = document.getElementById("user-edit-permanent");
       if (permanent) permanent.checked = edit.dataset.permanent === "1";
       const rolePick = document.getElementById("user-edit-role");
-      if (rolePick) rolePick.value = edit.dataset.role === "super" ? "super" : "registro";
+      if (rolePick) rolePick.value = ["super", "google", "registro"].includes(edit.dataset.role) ? edit.dataset.role : "registro";
+      const plan = document.getElementById("user-edit-plan");
+      if (plan) plan.value = "";
+      const special = document.getElementById("user-edit-special");
+      if (special) special.hidden = rolePick?.value !== "super";
+      ["month", "quarter", "half", "year"].forEach((key) => {
+        const field = document.getElementById(`special-${key}`);
+        if (field) field.value = "";
+      });
       const note = document.getElementById("user-edit-error");
       if (note) note.hidden = true;
       document.getElementById("user-edit-modal").hidden = false;
@@ -744,6 +832,10 @@
   document.getElementById("user-edit-modal")?.addEventListener("pointerdown", (event) => {
     if (event.target.id === "user-edit-modal") document.getElementById("user-edit-modal").hidden = true;
   });
+  document.getElementById("user-edit-role")?.addEventListener("change", (event) => {
+    const special = document.getElementById("user-edit-special");
+    if (special) special.hidden = event.target.value !== "super";
+  });
   document.getElementById("user-edit-save")?.addEventListener("click", async () => {
     const note = document.getElementById("user-edit-error");
     const fail = (text) => { if (note) { note.hidden = !text; note.textContent = text || ""; } };
@@ -755,16 +847,64 @@
           username: document.getElementById("user-edit-name").value.trim(),
           email: document.getElementById("user-edit-mail").value.trim(),
           password: document.getElementById("user-edit-pass").value,
-          role: document.getElementById("user-edit-role")?.value === "super" ? "super" : "registro",
+          role: ["super", "google", "registro"].includes(document.getElementById("user-edit-role")?.value) ? document.getElementById("user-edit-role").value : "registro",
           allowNegative: Boolean(document.getElementById("user-edit-negative")?.checked),
           permanent: Boolean(document.getElementById("user-edit-permanent")?.checked),
-          balanceAdd: document.getElementById("user-edit-balance")?.value || "",
+          membership: document.getElementById("user-edit-plan")?.value || "",
+          specialPrices: {
+            month: document.getElementById("special-month")?.value || "",
+            quarter: document.getElementById("special-quarter")?.value || "",
+            half: document.getElementById("special-half")?.value || "",
+            year: document.getElementById("special-year")?.value || "",
+          },
         }),
       });
       document.getElementById("user-edit-modal").hidden = true;
       loadUsers();
     } catch (error) {
-      fail(error.message || "No se pudo guardar.");
+      const text = error.message === "Failed to fetch" ? "No hay conexión con el servidor." : (error.message || "No se pudo guardar.");
+      fail(text);
+    }
+  });
+  function setBusy(on) {
+    const box = document.getElementById("busy-spin");
+    if (box) box.hidden = !on;
+  }
+  document.getElementById("backup-download-all")?.addEventListener("click", async () => {
+    setBusy(true);
+    try {
+      const data = await api("/api/admin/export", { method: "GET" });
+      const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `bloc-todo-${dayKey()}.json`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (error) {
+      alert(error.message || "No se pudo descargar todo.");
+    } finally {
+      setBusy(false);
+    }
+  });
+  document.getElementById("backup-import-all")?.addEventListener("click", () => {
+    document.getElementById("backup-full-file")?.click();
+  });
+  document.getElementById("backup-full-file")?.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!confirm("Esto sustituye usuarios, contraseñas, notas y pagos. ¿Continuar?")) return;
+    setBusy(true);
+    try {
+      const data = JSON.parse(await file.text());
+      if (data?.kind !== "bloc-full") throw new Error("El archivo no es una copia de todo el sistema.");
+      await api("/api/admin/import", { method: "POST", body: JSON.stringify(data) });
+      alert("Copia completa restaurada. Vuelve a entrar.");
+      clearLocalAccount();
+      location.reload();
+    } catch (error) {
+      alert(error.message || "No se pudo importar todo.");
+      setBusy(false);
     }
   });
   document.getElementById("backup-create")?.addEventListener("click", createManualBackup);
@@ -777,6 +917,9 @@
     if (!file) return;
     try {
       const data = JSON.parse(await file.text());
+      if (data?.kind === "bloc-full") {
+        throw new Error("Esta copia es de todo el sistema. Solo el admin la importa con Importar absolutamente todo.");
+      }
       const state = data.state && typeof data.state === "object" ? data.state : data;
       if (!state || typeof state !== "object" || !state.files && !state.templates) {
         throw new Error("El archivo no es una copia de Bloc.");

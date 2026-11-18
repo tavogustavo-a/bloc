@@ -830,7 +830,7 @@ function renderList() {
   const trashBar = document.getElementById("trash-actions");
   if (trashBar) trashBar.hidden = view !== "trash";
   const emptyTop = document.getElementById("btn-empty-trash-top");
-  if (emptyTop) emptyTop.hidden = view !== "trash";
+  if (emptyTop) emptyTop.hidden = view !== "trash" || state.accountOpen === true;
   if (els.add) els.add.hidden = view !== "active";
   const tplBar = document.getElementById("template-bar");
   if (tplBar) tplBar.hidden = view !== "active" || state.noTemplates === true;
@@ -1020,12 +1020,13 @@ function paintMathTotal(file) {
   const box = document.getElementById("math-total");
   if (!box) return;
   const tpl = file?.templateId ? state.templates[file.templateId] : null;
-  const on = Boolean(file && tpl?.math);
-  const parts = on ? noteMathParts(file.body, file.id) : [];
+  const mathOn = Boolean(file && tpl?.math);
+  const source = els.body && file && state.openId === file.id ? els.body.innerHTML : file?.body;
+  const parts = mathOn ? noteMathParts(source, file.id) : [];
   document.dispatchEvent(new CustomEvent("bloc-math", {
-    detail: { noteId: file?.id || "", parts: on ? parts : [] },
+    detail: { noteId: file?.id || "", parts },
   }));
-  if (!on) {
+  if (!mathOn) {
     box.hidden = true;
     box.textContent = "";
     return;
@@ -1036,12 +1037,12 @@ function paintMathTotal(file) {
   let split = false;
   try { split = JSON.parse(localStorage.getItem("bloc-gastos") || "{}").splitTotals === true; } catch (e) {}
   const lines = [];
-  if (split) named.forEach((part) => lines.push(`Total ${part.name} ${moneyLabel(part.total)}`));
+  if (split || named.length) named.forEach((part) => lines.push(`Total ${part.name} ${moneyLabel(part.total)}`));
   lines.push(`Total ${moneyLabel(total)}`);
   if (extra) {
     lines.push(`Iconos ${moneyLabel(extra)}`);
     lines.push(`Total de todo ${moneyLabel(total + extra)}`);
-  } else if (split) {
+  } else if (named.length || split) {
     lines[lines.length - 1] = `Total de todo ${moneyLabel(total)}`;
   }
   box.hidden = false;
@@ -1790,7 +1791,7 @@ function applyQuick(container, value, view) {
   return next;
 }
 
-document.getElementById("add-note").addEventListener("click", createFile);
+document.getElementById("add-note")?.addEventListener("click", createFile);
 els.search.addEventListener("input", renderList);
 document.querySelectorAll(".search-wrap").forEach((wrap) => {
   const input = wrap.querySelector("input");
@@ -3131,25 +3132,3 @@ function blocGoBack() {
   return false;
 }
 window.blocGoBack = blocGoBack;
-
-function paintLan() {
-  const hint = document.getElementById("lan-hint");
-  const host = location.hostname;
-  if (host !== "127.0.0.1" && host !== "localhost") {
-    if (!window.BlocNative?.changeServer || !hint) return;
-    hint.hidden = false;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = "Cambiar computador";
-    button.addEventListener("click", () => window.BlocNative.changeServer());
-    hint.replaceChildren(document.createTextNode("Misma cuenta del PC. "), button);
-    return;
-  }
-  fetch("/api/lan").then((response) => response.json()).then((data) => {
-    const url = (data.urls || [])[0];
-    if (!url || !hint) return;
-    hint.hidden = false;
-    hint.textContent = `Celular, misma cuenta: ${url}`;
-  }).catch(() => {});
-}
-paintLan();

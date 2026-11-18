@@ -6,11 +6,11 @@
   <title>Bloc</title>
   <meta name="description" content="Notas con avisos. Selecciona una palabra y elige en el calendario cuándo debe sonar.">
   <meta name="theme-color" content="#1a1814">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%231a1814' width='100' height='100' rx='20'/><text y='.72em' x='50' text-anchor='middle' fill='%23f7f1e6' font-size='64' font-family='Georgia'>B</text></svg>">
+  <link rel="icon" href="favicon.svg?v=3" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,620&family=Outfit:wght@380;500;640&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=187">
+  <link rel="stylesheet" href="css/styles.css?v=220">
   <script>
     try { if (!localStorage.getItem("bloc-cuenta")) document.documentElement.classList.add("locked-out"); } catch (e) {}
   </script>
@@ -113,8 +113,8 @@
               </label>
               <div id="spend-icons"></div>
             </aside>
+            <p id="math-total" class="math-total" hidden></p>
           </div>
-          <p id="math-total" class="math-total" hidden></p>
           <p id="status" class="status" role="status"></p>
           <div id="note-alarms-block">
             <h3>Avisos de esta nota</h3>
@@ -241,11 +241,19 @@
     </div>
   </div>
 
+  <div id="busy-spin" hidden>
+    <div class="busy-card">
+      <span class="busy-ring"></span>
+      <p>Esto puede tardar si hay muchos datos.</p>
+    </div>
+  </div>
   <button type="button" id="add-note" class="add-note" aria-label="Nueva nota">+</button>
   <input type="file" id="import-file" accept="application/json" hidden name="import-file">
   <input type="file" id="backup-file" accept="application/json" hidden name="backup-file">
+  <input type="file" id="backup-full-file" accept="application/json" hidden name="backup-full-file">
 
   <div id="app-menu" class="note-menu app-menu" hidden role="menu">
+    <h2 class="menu-title">Menú</h2>
     <button type="button" data-menu="home" aria-label="Inicio">
       <span class="menu-ico icon-home">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -342,6 +350,11 @@
       <span>Cuenta</span>
       <span class="info-ico" data-info="Entra a la cuenta y cambia la contraseña." role="button" tabindex="0" aria-label="Qué hace Cuenta"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></span>
     </button>
+    <form id="menu-coupon" class="menu-coupon" name="menu-coupon">
+      <input id="menu-coupon-code" name="menu-coupon-code" type="text" autocomplete="off" placeholder="Cupón" aria-label="Cupón">
+      <button type="submit" class="solid">Canjear</button>
+      <p id="menu-coupon-note" hidden></p>
+    </form>
   </div>
 
   <button type="button" id="sel-action" class="sel-action" hidden>Programar aviso</button>
@@ -842,6 +855,7 @@
         <button type="button" id="logout-close" class="icon-btn" aria-label="Cerrar">✕</button>
       </div>
       <p class="info-text">Elige dónde cerrar la sesión.</p>
+      <p id="logout-note" class="cal-conflict" hidden></p>
       <div class="modal-actions">
         <button type="button" class="ghost" data-logout="device">Este dispositivo</button>
         <button type="button" class="ghost" data-logout="all">Todos los dispositivos</button>
@@ -864,6 +878,23 @@
     </div>
   </div>
 
+  <div id="user-credit-modal" class="modal" hidden>
+    <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="user-credit-heading">
+      <div class="modal-head look-head">
+        <h2 id="user-credit-heading">Sumar saldo</h2>
+        <button type="button" id="user-credit-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="user-credit-form" name="user-credit-form" class="login-field-stack">
+        <input id="user-credit-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="Cuánto sumar" aria-label="Cuánto sumar" name="user-credit-amount" required>
+        <p id="user-credit-error" class="cal-conflict" hidden></p>
+        <div class="modal-actions">
+          <button type="button" id="user-credit-cancel" class="ghost">Cancelar</button>
+          <button type="submit" class="solid">Sumar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="user-edit-modal" class="modal" hidden>
     <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="user-edit-heading">
       <div class="modal-head look-head">
@@ -873,20 +904,83 @@
       <form id="user-edit-form" name="user-edit-form" class="login-field-stack" onsubmit="return false">
         <input id="user-edit-name" type="text" name="username" autocomplete="username" placeholder="Usuario" aria-label="Usuario">
         <input id="user-edit-mail" type="email" autocomplete="off" name="user-edit-mail" placeholder="Correo" aria-label="Correo">
-        <div class="pass-super-row">
+        <div class="edit-type-row">
           <input id="user-edit-pass" type="password" autocomplete="new-password" placeholder="Contraseña nueva" aria-label="Contraseña nueva" name="user-edit-pass">
           <label class="tpl-field" id="user-edit-role-field">Tipo
             <select id="user-edit-role" name="user-edit-role" aria-label="Tipo de usuario">
               <option value="registro">Registro</option>
+              <option value="google">Google</option>
               <option value="super">Super</option>
             </select>
           </label>
         </div>
-        <input id="user-edit-balance" type="text" inputmode="decimal" autocomplete="off" placeholder="Sumar saldo" aria-label="Sumar saldo" name="user-edit-balance">
+        <select id="user-edit-plan" name="user-edit-plan" aria-label="Activar membresía">
+          <option value="">Activar membresía</option>
+          <option value="month">1 mes · $15.000</option>
+          <option value="quarter">3 meses · $40.500</option>
+          <option value="half">6 meses · $72.000</option>
+          <option value="year">1 año · $126.000</option>
+        </select>
+        <div id="user-edit-special" hidden>
+          <p class="color-note-title">Precio interno del super. El usuario ve el precio de arriba.</p>
+          <input id="special-month" type="text" inputmode="decimal" placeholder="1 mes, precio interno" aria-label="Precio interno 1 mes">
+          <input id="special-quarter" type="text" inputmode="decimal" placeholder="3 meses, precio interno" aria-label="Precio interno 3 meses">
+          <input id="special-half" type="text" inputmode="decimal" placeholder="6 meses, precio interno" aria-label="Precio interno 6 meses">
+          <input id="special-year" type="text" inputmode="decimal" placeholder="1 año, precio interno" aria-label="Precio interno 1 año">
+        </div>
         <label class="info-switch"><input id="user-edit-negative" type="checkbox" name="user-edit-negative"> Puede quedar con saldo negativo</label>
         <label class="info-switch"><input id="user-edit-permanent" type="checkbox" name="user-edit-permanent"> Permanente, sin cobro</label>
         <p id="user-edit-error" class="cal-conflict" hidden></p>
         <button type="button" id="user-edit-save" class="solid">Guardar</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="create-modal" class="modal" hidden>
+    <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="create-heading">
+      <div class="modal-head look-head">
+        <h2 id="create-heading">Crear usuario</h2>
+        <button type="button" id="create-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="create-form" name="create-form" class="login-field-stack">
+        <input id="create-user" type="text" autocomplete="username" required placeholder="Usuario" aria-label="Usuario" name="create-user">
+        <input id="create-mail" type="email" autocomplete="email" required placeholder="Correo" aria-label="Correo" name="create-mail">
+        <div class="pass-field">
+          <input id="create-pass" type="password" autocomplete="new-password" required minlength="6" placeholder="Contraseña" aria-label="Contraseña" name="create-pass">
+          <button type="button" class="pass-eye" data-pass-toggle="create-pass" aria-label="Mostrar contraseña" aria-pressed="false">
+            <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="pass-field">
+          <input id="create-pass2" type="password" autocomplete="new-password" required minlength="6" placeholder="Repetir contraseña" aria-label="Repetir contraseña" name="create-pass2">
+          <button type="button" class="pass-eye" data-pass-toggle="create-pass2" aria-label="Mostrar contraseña" aria-pressed="false">
+            <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <p id="create-error" class="cal-conflict" hidden></p>
+        <div class="modal-actions">
+          <button type="button" id="create-cancel" class="ghost">Cancelar</button>
+          <button type="submit" class="solid">Crear usuario</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="recover-modal" class="modal" hidden>
+    <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="recover-heading">
+      <div class="modal-head look-head">
+        <h2 id="recover-heading">Recuperar contraseña</h2>
+        <button type="button" id="recover-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="recover-form" name="recover-form" class="login-field-stack">
+        <input id="recover-id" type="text" autocomplete="username" placeholder="Correo o usuario" aria-label="Correo o usuario para recuperar" name="recover-id">
+        <p id="recover-note" class="color-note-title" hidden></p>
+        <div class="modal-actions">
+          <button type="button" id="recover-cancel" class="ghost">Cancelar</button>
+          <button type="submit" class="solid">Enviar enlace</button>
+        </div>
       </form>
     </div>
   </div>
@@ -906,7 +1000,8 @@
               <path d="M20 30h20M20 37h20M20 44h12" stroke="#c4562a" stroke-width="2.3" stroke-linecap="round"/>
             </svg>
           </span>
-          <p class="login-logo">tupremiumm notas</p>
+          <p class="login-logo">notas tupremiumm</p>
+          <p class="login-tag">Tus notas, en un solo lugar</p>
         </div>
         <div class="login-panel">
         <form id="account-form" name="account-form">
@@ -927,41 +1022,8 @@
           <p id="account-error" class="cal-conflict" hidden></p>
         </form>
         <button type="button" id="recover-toggle" class="login-forgot">¿Olvidaste la contraseña?</button>
-        <div id="recover-fields" class="login-extra" hidden>
-          <form id="recover-form" name="recover-form">
-            <input id="recover-id" type="text" autocomplete="username" placeholder="Correo o usuario" aria-label="Correo o usuario para recuperar" name="recover-id">
-            <div class="login-actions">
-              <button type="submit" class="ghost">Enviar enlace</button>
-            </div>
-            <p id="recover-note" class="color-note-title" hidden></p>
-          </form>
-        </div>
         </div>
         <button type="button" id="create-toggle" class="login-panel-title login-panel-title--btn">Crear usuario</button>
-        <form id="create-form" name="create-form" class="login-panel" hidden>
-          <div class="login-field-stack">
-            <input id="create-user" type="text" autocomplete="username" required placeholder="Usuario" aria-label="Usuario" name="create-user">
-            <input id="create-mail" type="email" autocomplete="email" required placeholder="Correo" aria-label="Correo" name="create-mail">
-            <div class="pass-field">
-              <input id="create-pass" type="password" autocomplete="new-password" required minlength="6" placeholder="Contraseña" aria-label="Contraseña" name="create-pass">
-              <button type="button" class="pass-eye" data-pass-toggle="create-pass" aria-label="Mostrar contraseña" aria-pressed="false">
-                <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
-                <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-              </button>
-            </div>
-            <div class="pass-field">
-              <input id="create-pass2" type="password" autocomplete="new-password" required minlength="6" placeholder="Repetir contraseña" aria-label="Repetir contraseña" name="create-pass2">
-              <button type="button" class="pass-eye" data-pass-toggle="create-pass2" aria-label="Mostrar contraseña" aria-pressed="false">
-                <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
-                <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-              </button>
-            </div>
-          </div>
-          <div class="login-actions">
-            <button type="submit" class="solid">Crear usuario</button>
-          </div>
-          <p id="create-error" class="cal-conflict" hidden></p>
-        </form>
         <form id="reset-form" name="reset-form" hidden>
           <input class="sr" type="text" id="reset-user" name="username" autocomplete="username" tabindex="-1">
           <p class="color-note-title">Elige la contraseña nueva.</p>
@@ -975,9 +1037,8 @@
         </form>
       </div>
       <div id="account-in" hidden>
-        <p id="account-sync" class="color-note-title" hidden></p>
-        <p id="lan-hint" class="color-note-title lan-hint" hidden></p>
         <div class="account-block">
+          <p id="account-sync" class="color-note-title" hidden></p>
           <p id="account-balance" class="pay-balance">Saldo $0</p>
           <p id="account-until" class="color-note-title"></p>
           <form id="coupon-redeem" name="coupon-redeem" class="login-field-stack">
@@ -990,7 +1051,6 @@
           <div id="account-admin" hidden>
             <h3>Usuarios</h3>
           <div class="user-tools">
-            <label class="info-switch"><input id="user-debt" name="user-debt" type="checkbox"> Saldo negativo</label>
             <label class="search-wrap">
               <span class="sr">Buscar usuario</span>
               <input id="user-search" name="user-search" type="search" placeholder="Buscar usuario" autocomplete="off">
@@ -1010,16 +1070,6 @@
             <span id="user-page">Página 1 de 1</span>
             <button type="button" id="user-next" class="solid">Siguiente</button>
           </div>
-          <div class="admin-only">
-          <h3>Crear cupón</h3>
-          <form id="coupon-create" name="coupon-create" class="login-field-stack">
-            <input id="coupon-amount" name="coupon-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="Saldo del cupón" aria-label="Saldo del cupón">
-            <input id="coupon-custom" name="coupon-custom" type="text" autocomplete="off" placeholder="Código, opcional" aria-label="Código del cupón">
-            <button type="submit" class="solid">Crear cupón</button>
-            <p id="coupon-create-note" class="color-note-title" hidden></p>
-          </form>
-          <ul id="coupon-list" class="pay-list"></ul>
-          </div>
           <h3>Crear usuario</h3>
           <form id="admin-create" name="admin-create" class="login-field-stack">
             <input id="admin-user" name="admin-user" type="text" required placeholder="Usuario" aria-label="Usuario" autocomplete="username">
@@ -1032,17 +1082,31 @@
                   <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5 20 20M9.2 6.4A10 10 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.8M6.1 8.2C3.7 9.8 2 12 2 12s3.5 6 10 6a9.6 9.6 0 0 0 3.4-.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
                 </button>
               </div>
-              <label class="info-switch admin-only">
-                <input id="admin-super" name="admin-super" type="checkbox">
-                Super usuario
-              </label>
+              <select id="admin-kind" name="admin-kind" aria-label="Tipo de usuario">
+                <option value="registro">Registro</option>
+                <option value="google">Google</option>
+                <option value="super">Super</option>
+              </select>
             </div>
             <button type="submit" class="solid">Crear usuario</button>
             <p id="admin-create-note" class="color-note-title" hidden></p>
           </form>
           </div>
         </div>
+        <div class="account-block admin-only">
+          <h3>Crear cupón</h3>
+          <form id="coupon-create" name="coupon-create" class="login-field-stack">
+            <input id="coupon-amount" name="coupon-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="Saldo del cupón" aria-label="Saldo del cupón">
+            <input id="coupon-custom" name="coupon-custom" type="text" autocomplete="off" placeholder="Código, opcional" aria-label="Código del cupón">
+            <button type="submit" class="solid">Crear cupón</button>
+            <p id="coupon-create-note" class="color-note-title" hidden></p>
+          </form>
+          <ul id="coupon-list" class="pay-list"></ul>
+        </div>
         <div class="account-block">
+          <div class="backup-full admin-only">
+            <button type="button" id="backup-import-all" class="solid">Importar absolutamente todo</button>
+          </div>
           <div class="section-line">
             <h3>Copias de seguridad</h3>
             <span class="backup-actions">
@@ -1154,15 +1218,15 @@
     </div>
   </section>
 
-  <script src="js/app.js?v=90"></script>
-  <script src="js/features.js?v=83"></script>
-  <script src="js/account.js?v=68"></script>
+  <script src="js/app.js?v=95"></script>
+  <script src="js/features.js?v=85"></script>
+  <script src="js/account.js?v=77"></script>
   <script>
     if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
       navigator.serviceWorker.register("sw.js").catch(function () {});
     }
   </script>
-  <script src="js/payments.js?v=4"></script>
+  <script src="js/payments.js?v=7"></script>
   <script src="js/spend.js?v=17"></script>
 </body>
 </html>

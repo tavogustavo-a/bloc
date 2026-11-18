@@ -3,6 +3,7 @@
 import base64
 import copy
 import hashlib
+import html
 import json
 import os
 import re
@@ -23,6 +24,7 @@ PAY_STORE = ROOT / "data" / "payments.json"
 PROOFS = ROOT / "data" / "proofs"
 LOCK = threading.Lock()
 _pg = None
+_pg_down = False
 _users_snapshot = None
 _payments_snapshot = None
 USER_RE = re.compile(r"^[a-z0-9._-]{3,32}$")
@@ -46,14 +48,21 @@ def empty_store():
 
 def database_url():
     load_env()
+    if _pg_down:
+        return ""
     return os.environ.get("DATABASE_URL", "").strip()
 
 
 def pg_conn():
-    global _pg
+    global _pg, _pg_down
     import psycopg
     if _pg is None or _pg.closed:
-        _pg = psycopg.connect(database_url())
+        try:
+            _pg = psycopg.connect(database_url(), connect_timeout=3)
+        except Exception:
+            _pg_down = True
+            _pg = None
+            raise
     return _pg
 
 
@@ -126,16 +135,21 @@ def read_payments_pg():
 def load_store():
     load_env()
     if database_url():
-        global _users_snapshot
-        if _users_snapshot is None:
-            _users_snapshot = {"users": read_users_pg()}
-        data = copy.deepcopy(_users_snapshot)
-        if not isinstance(data.get("users"), dict):
-            data["users"] = {}
-        apply_roles(data)
-        if ensure_admin(data):
-            write_store(data)
-        return data
+        global _users_snapshot, _pg_down
+        try:
+            if _users_snapshot is None:
+                _users_snapshot = {"users": read_users_pg()}
+            data = copy.deepcopy(_users_snapshot)
+            if not isinstance(data.get("users"), dict):
+                data["users"] = {}
+            apply_roles(data)
+            if ensure_admin(data):
+                write_store(data)
+            return data
+        except Exception as exc:
+            print("PostgreSQL no respondió, se usan los archivos:", exc)
+            _pg_down = True
+            _users_snapshot = None
     data = empty_store()
     if STORE.exists():
         try:
@@ -480,7 +494,7 @@ def smtp_settings():
     }
 
 
-def send_mail(to, subject, body):
+def send_mail(to, subject, body, html=None):
     cfg = smtp_settings()
     if not cfg:
         print("SMTP no configurado en .env.")
@@ -491,6 +505,8 @@ def send_mail(to, subject, body):
         message["From"] = cfg["from"]
         message["To"] = to
         message.set_content(body)
+        if html:
+            message.add_alternative(html, subtype="html")
         if cfg["port"] == 465:
             server = smtplib.SMTP_SSL(cfg["host"], cfg["port"], timeout=20)
         else:
@@ -508,10 +524,39 @@ def send_mail(to, subject, body):
 
 
 def send_reset(to, link):
+    safe = html.escape(link, quote=True)
+    page = f"""<!DOCTYPE html>
+<html lang="es">
+<body style="margin:0;padding:0;background:#f6f1e8;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f1e8;padding:32px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:460px;background:#fffdf8;border:2px solid #1a1814;border-radius:22px;">
+        <tr><td style="background:#1a1814;border-radius:20px 20px 0 0;padding:22px 24px;text-align:center;">
+          <p style="margin:0;font-family:Georgia,serif;font-size:28px;color:#f6efe4;">notas tupremiumm</p>
+        </td></tr>
+        <tr><td style="padding:28px 28px 8px;font-family:Georgia,serif;font-size:26px;color:#1a1814;text-align:center;">
+          Recupera tu contraseña
+        </td></tr>
+        <tr><td style="padding:8px 28px 22px;font-family:Arial,sans-serif;font-size:16px;line-height:1.5;color:#3d3832;text-align:center;">
+          Alguien pidió una contraseña nueva para tu cuenta. El enlace vale 1 hora. Si no fuiste tú, ignora este correo.
+        </td></tr>
+        <tr><td align="center" style="padding:0 28px 28px;">
+          <a href="{safe}" style="display:inline-block;background:#1a1814;color:#f7f1e6;text-decoration:none;font-family:Arial,sans-serif;font-size:16px;padding:14px 28px;border-radius:999px;">Elegir contraseña nueva</a>
+        </td></tr>
+        <tr><td style="padding:0 28px 28px;font-family:Arial,sans-serif;font-size:13px;line-height:1.4;color:#6d645b;text-align:center;">
+          Si el botón no abre, copia este enlace:<br>
+          <a href="{safe}" style="color:#c4562a;word-break:break-all;">{safe}</a>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
     return send_mail(
         to,
-        "Recuperar contraseña de Bloc",
-        "Para elegir una contraseña nueva abre este enlace. Vale durante 1 hora.\n\n" + link + "\n",
+        "Recupera tu contraseña de notas tupremiumm",
+        "Para elegir una contraseña nueva abre este enlace. Vale durante 1 hora.\n\n" + link + "\n\nSi no pediste el cambio, ignora este correo.\n",
+        page,
     )
 
 
@@ -556,6 +601,9 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/users":
             self.users_get()
             return
+        if path == "/api/admin/export":
+            self.admin_export()
+            return
         if path == "/api/payments":
             self.payments_get()
             return
@@ -579,6 +627,7 @@ class Handler(SimpleHTTPRequestHandler):
             "/api/users/update": self.users_update,
             "/api/users/credit": self.users_credit,
             "/api/users/delete": self.users_delete,
+            "/api/admin/import": self.admin_import,
             "/api/account/close": self.close_account,
             "/api/master/code": self.master_code,
             "/api/master/reset": self.master_reset,
@@ -622,7 +671,8 @@ class Handler(SimpleHTTPRequestHandler):
             return None
         for user in store["users"].values():
             for session in user.get("sessions") or []:
-                if session.get("id") == token:
+                sid = session.get("id") if isinstance(session, dict) else session
+                if sid == token:
                     return user
         return None
 
@@ -786,7 +836,12 @@ class Handler(SimpleHTTPRequestHandler):
                 user["sessions"] = []
             else:
                 current = self.token()
-                user["sessions"] = [item for item in user.get("sessions") or [] if item.get("id") != current]
+                kept = []
+                for item in user.get("sessions") or []:
+                    sid = item.get("id") if isinstance(item, dict) else item
+                    if sid != current:
+                        kept.append(item)
+                user["sessions"] = kept
             write_store(store)
         self.send_json(200, {"ok": True, "scope": scope})
 
@@ -823,9 +878,12 @@ class Handler(SimpleHTTPRequestHandler):
             if not user:
                 self.send_json(401, {"error": "La sesión no es válida."})
                 return
+            if user.get("role") == "admin":
+                self.send_json(400, {"error": "La cuenta de administrador no se elimina."})
+                return
             user_id = user["id"]
             email = user.get("email") or ""
-            user["sessions"] = []
+            store["users"].pop(user_id, None)
             write_store(store)
         if email:
             send_mail(
@@ -834,8 +892,7 @@ class Handler(SimpleHTTPRequestHandler):
                 "Cerraste tu cuenta. Se eliminan las notas, las copias y las sesiones. "
                 "Si tenías una suscripción, se pierden los pagos ya hechos y los días que quedaban.\n",
             )
-        erase_later(user_id)
-        self.send_json(202, {"ok": True, "message": "La cuenta se está eliminando en segundo plano."})
+        self.send_json(200, {"ok": True})
 
     def sync_get(self):
         with LOCK:
@@ -979,9 +1036,16 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_json(409, {"error": "Ese correo ya existe."})
                 return
             uid = secrets.token_hex(8)
-            role = "user"
+            role = "registro"
+            kind = str(data.get("role") or "")
+            if actor.get("role") == "admin" and kind in ("super", "google", "registro"):
+                role = kind
+            elif kind == "google":
+                role = "google"
             parent = actor["id"] if actor.get("role") == "super" else None
-            if actor.get("role") == "admin" and data.get("super"):
+            if role == "super":
+                parent = None
+            elif data.get("super") and actor.get("role") == "admin":
                 role = "super"
                 parent = None
             store["users"][uid] = {
@@ -1029,9 +1093,48 @@ class Handler(SimpleHTTPRequestHandler):
                     "allowNegative": item.get("allowNegative") is True,
                     "permanent": item.get("permanent") is True,
                     "until": int(item.get("subscriptionUntil") or 0),
+                    "listed": int((item.get("membership") or {}).get("listed") or 0),
+                    "charged": int((item.get("membership") or {}).get("charged") or 0),
                 })
         people.sort(key=lambda item: (item["role"] != "admin", item["username"] or item["email"]))
         self.send_json(200, {"users": people})
+
+    def admin_export(self):
+        with LOCK:
+            store = load_store()
+            if not self.require_admin(store):
+                return
+            users = copy.deepcopy(store.get("users") or {})
+            for user in users.values():
+                if isinstance(user, dict):
+                    user["sessions"] = []
+            pay = load_payments()
+        self.send_json(200, {"kind": "bloc-full", "users": users, "payments": pay})
+
+    def admin_import(self):
+        data = self.read_json()
+        users = data.get("users")
+        if data.get("kind") != "bloc-full" or not isinstance(users, dict):
+            self.send_json(400, {"error": "Esta copia no es de todo el sistema."})
+            return
+        clean = {}
+        for uid, user in users.items():
+            if not isinstance(user, dict):
+                continue
+            user["sessions"] = []
+            user["id"] = user.get("id") or uid
+            clean[user["id"]] = user
+        if not clean:
+            self.send_json(400, {"error": "La copia no trae usuarios."})
+            return
+        with LOCK:
+            store = load_store()
+            if not self.require_admin(store):
+                return
+            write_store({"users": clean})
+            if isinstance(data.get("payments"), dict):
+                write_payments(data["payments"])
+        self.send_json(200, {"ok": True})
 
     def require_admin(self, store):
         user = self.user_by_token(store)
@@ -1072,10 +1175,10 @@ class Handler(SimpleHTTPRequestHandler):
         if not username and not email:
             self.send_json(400, {"error": "Deja un usuario o un correo."})
             return
-            if password and len(password) < 6:
-                self.send_json(400, {"error": "La contraseña necesita al menos 6 caracteres."})
-                return
-            active = data.get("active") if "active" in data else None
+        if password and len(password) < 6:
+            self.send_json(400, {"error": "La contraseña necesita al menos 6 caracteres."})
+            return
+        active = data.get("active") if "active" in data else None
         with LOCK:
             store = load_store()
             if not self.require_admin(store):
@@ -1101,7 +1204,7 @@ class Handler(SimpleHTTPRequestHandler):
                 target["active"] = bool(active)
             if target.get("role") != "admin":
                 chosen = data.get("role")
-                if chosen in ("registro", "super"):
+                if chosen in ("registro", "super", "google"):
                     target["role"] = chosen
                 elif "super" in data:
                     target["role"] = "super" if data.get("super") else "registro"
@@ -1109,6 +1212,16 @@ class Handler(SimpleHTTPRequestHandler):
                     target["allowNegative"] = bool(data.get("allowNegative"))
                 if "permanent" in data:
                     target["permanent"] = bool(data.get("permanent"))
+                if target.get("role") == "super" and isinstance(data.get("specialPrices"), dict):
+                    clean = {}
+                    for key in ("month", "quarter", "half", "year"):
+                        raw = data["specialPrices"].get(key)
+                        if raw in (None, ""):
+                            continue
+                        amount = parse_amount(raw)
+                        if amount is not None and amount >= 0:
+                            clean[key] = amount
+                    target["specialPrices"] = clean
             pay = load_payments()
             added = data.get("balanceAdd")
             if added not in (None, ""):
@@ -1117,6 +1230,17 @@ class Handler(SimpleHTTPRequestHandler):
                     self.send_json(400, {"error": "El saldo no es un número."})
                     return
                 set_wallet(pay, uid, wallet_of(pay, uid) + delta)
+                write_payments(pay)
+            period_id = str(data.get("membership") or "")
+            if period_id:
+                payer = store["users"].get(target.get("parentId") or "") if target.get("parentId") else None
+                charged = None
+                if payer and payer.get("role") == "super":
+                    charged = special_price(payer, plan_period(period_id) or {})
+                ok, result = activate_period(target, pay, period_id, charged=charged)
+                if not ok:
+                    self.send_json(400, {"error": result})
+                    return
                 write_payments(pay)
             write_store(store)
         self.send_json(200, {"ok": True})
@@ -1380,6 +1504,8 @@ class Handler(SimpleHTTPRequestHandler):
             if token in pay["playTokens"]:
                 self.send_json(409, {"error": "Esa compra ya se usó."})
                 return
+            if user.get("role") not in ("admin", "super"):
+                user["role"] = "google"
             ok, result = activate_period(user, pay, str(data.get("period") or ""), free=True)
             if not ok:
                 self.send_json(400, {"error": result})
@@ -1578,14 +1704,26 @@ def access_view(store, pay, user):
         "admin": admin,
         "needsPlan": not entitled(user),
         "playOnly": False,
+        "listed": int((user.get("membership") or {}).get("listed") or 0),
     }
 
 
-def activate_period(user, pay, period_id, free=False):
+def special_price(actor, period):
+    prices = (actor or {}).get("specialPrices") or {}
+    raw = prices.get((period or {}).get("id"))
+    try:
+        value = round(float(raw))
+    except (TypeError, ValueError):
+        return (period or {}).get("price") or 0
+    return value if value > 0 else (period or {}).get("price") or 0
+
+
+def activate_period(user, pay, period_id, free=False, charged=None):
     period = plan_period(period_id)
     if not period:
         return False, "Ese plazo no existe."
-    price = 0 if free else period["price"]
+    listed = period["price"]
+    price = 0 if free else (listed if charged is None else charged)
     balance = wallet_of(pay, user.get("id"))
     if not free and balance < price and user.get("allowNegative") is not True:
         return False, "No alcanza el saldo. Recarga o elige un plazo menor."
@@ -1596,6 +1734,7 @@ def activate_period(user, pay, period_id, free=False):
     user["subscriptionUntil"] = base + period["months"] * MONTH_MS
     user["planId"] = PLAN["id"]
     user["periodId"] = period["id"]
+    user["membership"] = {"periodId": period["id"], "listed": listed, "charged": price, "at": now}
     return True, period
 
 
