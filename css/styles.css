@@ -2185,7 +2185,8 @@ body.theme-dark button.section-title:hover { background: rgba(255, 255, 255, 0.0
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(22, 16, 12, 0.62);
+  background: rgba(8, 6, 5, 0.82);
+  backdrop-filter: blur(2px);
   display: grid;
   place-items: center;
   padding: 18px;
