@@ -91,6 +91,8 @@ const baseTitle = document.title;
 function blank() {
   return {
     files: [], alarms: [], sound: true, openId: null, listView: "active", lastSnoozeQuick: "10", theme: "light",
+    showExport: true, showImport: true, hideTools: false, hideEditor: false, toolSize: 46,
+    toolOrder: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
     showDetail: false, focusOpen: false, activeTemplate: "compras", accountOpen: false,
     templates: structuredClone(DEFAULT_TEMPLATES),
     templateLook: { layout: "titles", size: 22 },
@@ -130,6 +132,15 @@ function normalize(data) {
   next.openId = data.openId || null;
   next.lastSnoozeQuick = data.lastSnoozeQuick || "10";
   next.theme = data.theme === "dark" ? "dark" : "light";
+  next.showExport = data.showExport !== false;
+  next.showImport = data.showImport !== false;
+  next.hideTools = data.hideTools === true;
+  next.hideEditor = data.hideEditor === true;
+  const toolSize = Number(data.toolSize);
+  next.toolSize = toolSize >= 36 && toolSize <= 64 ? toolSize : 46;
+  const toolIds = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+  const toolOrder = Array.isArray(data.toolOrder) ? data.toolOrder.map(String).filter((id) => toolIds.includes(id)) : [];
+  next.toolOrder = [...toolOrder, ...toolIds.filter((id) => !toolOrder.includes(id))];
   next.listView = ["active", "archived", "trash"].includes(data.listView) ? data.listView : "active";
   next.showDetail = data.showDetail !== false;
   next.focusOpen = data.focusOpen === true;
@@ -554,6 +565,12 @@ function snapshot() {
     activeTemplate: state.activeTemplate,
     lastSnoozeQuick: state.lastSnoozeQuick,
     theme: state.theme,
+    showExport: state.showExport !== false,
+    showImport: state.showImport !== false,
+    hideTools: state.hideTools === true,
+    hideEditor: state.hideEditor === true,
+    toolSize: state.toolSize,
+    toolOrder: state.toolOrder,
     templates: state.templates,
     templateLook: state.templateLook,
     noteGap: state.noteGap,
@@ -623,6 +640,12 @@ function applyRemoteState(data) {
   state.accountOpen = next.accountOpen;
   state.activeTemplate = next.activeTemplate;
   state.theme = next.theme;
+  state.showExport = next.showExport !== false;
+  state.showImport = next.showImport !== false;
+  state.hideTools = next.hideTools === true;
+  state.hideEditor = next.hideEditor === true;
+  state.toolSize = next.toolSize;
+  state.toolOrder = next.toolOrder;
   state.templates = next.templates;
   state.templateLook = next.templateLook;
   state.noteGap = next.noteGap;

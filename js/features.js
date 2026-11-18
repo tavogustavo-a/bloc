@@ -6,20 +6,170 @@
   let tplMenuId = null;
   let tplPress = null;
 
-  const themeMoon = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="#fff" d="M14.8 3.1A8.4 8.4 0 1 0 20.9 15 6.7 6.7 0 0 1 14.8 3.1z"/></svg>`;
-  const themeSun = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="3.3" fill="#fff"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M12 3.2v2.1M12 18.7V21M4.5 4.5l1.5 1.5M18 18l1.5 1.5M3.2 12h2.1M18.7 12H21M4.5 19.5 6 18M18 6l1.5-1.5"/></svg>`;
+  const TOOL_IDS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+
+  function orderTools() {
+    const bloc = B();
+    const scroll = document.getElementById("tool-scroll");
+    if (!bloc || !scroll) return;
+    const saved = Array.isArray(bloc.state.toolOrder) ? bloc.state.toolOrder.map(String).filter((id) => TOOL_IDS.includes(id)) : [];
+    [...saved, ...TOOL_IDS.filter((id) => !saved.includes(id))].forEach((id) => {
+      const el = scroll.querySelector(`[data-tool="${id}"]`);
+      if (el) scroll.appendChild(el);
+    });
+  }
+
+  function applyToolChrome() {
+    const bloc = B();
+    if (!bloc) return;
+    const hideBar = bloc.state.hideTools === true;
+    const hideEditor = bloc.state.hideEditor === true;
+    document.body.classList.toggle("hide-tools", hideBar);
+    const editor = document.querySelector('[data-menu="editor"]');
+    if (editor) editor.hidden = hideEditor;
+    [
+      ["shortcut-hide-tools", hideBar],
+      ["shortcut-hide-editor", hideEditor],
+    ].forEach(([id, on]) => {
+      const box = document.getElementById(id);
+      if (!box) return;
+      box.classList.toggle("is-on", on);
+      box.setAttribute("aria-pressed", String(on));
+    });
+    const size = Number(bloc.state.toolSize);
+    const px = size >= 36 && size <= 64 ? size : 46;
+    document.documentElement.style.setProperty("--tool-size", `${px}px`);
+    const field = document.getElementById("tool-size");
+    if (field) field.value = String(px);
+    orderTools();
+  }
+
+  function bindToolDrag() {
+    const scroll = document.getElementById("tool-scroll");
+    if (!scroll || scroll.dataset.bound) return;
+    scroll.dataset.bound = "1";
+    let drag = null;
+    scroll.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      drag = {
+        btn: event.target.closest(".tool-ico"),
+        x: event.clientX,
+        left: scroll.scrollLeft,
+        moved: false,
+      };
+      scroll.setPointerCapture(event.pointerId);
+    });
+    scroll.addEventListener("pointermove", (event) => {
+      if (!drag) return;
+      const dx = event.clientX - drag.x;
+      if (Math.abs(dx) > 4) drag.moved = true;
+      if (!drag.btn) {
+        scroll.scrollLeft = drag.left - dx;
+        return;
+      }
+      drag.btn.classList.add("is-drag");
+      const items = [...scroll.querySelectorAll(".tool-ico")];
+      let next = null;
+      for (const el of items) {
+        if (el === drag.btn) continue;
+        const box = el.getBoundingClientRect();
+        if (event.clientX < box.left + box.width / 2) {
+          next = el;
+          break;
+        }
+      }
+      if (next) scroll.insertBefore(drag.btn, next);
+      else scroll.appendChild(drag.btn);
+      const edge = scroll.getBoundingClientRect();
+      if (event.clientX > edge.right - 36) scroll.scrollLeft += 14;
+      if (event.clientX < edge.left + 36) scroll.scrollLeft -= 14;
+    });
+    const finish = () => {
+      if (!drag) return;
+      const moved = drag.moved;
+      drag.btn?.classList.remove("is-drag");
+      drag = null;
+      if (!moved) return;
+      scroll.dataset.dragged = "1";
+      const bloc = B();
+      if (!bloc) return;
+      bloc.state.toolOrder = [...scroll.querySelectorAll(".tool-ico")].map((el) => el.dataset.tool);
+      bloc.save();
+    };
+    scroll.addEventListener("pointerup", finish);
+    scroll.addEventListener("pointercancel", () => {
+      drag?.btn?.classList.remove("is-drag");
+      drag = null;
+    });
+    scroll.addEventListener("click", (event) => {
+      if (scroll.dataset.dragged !== "1") return;
+      event.preventDefault();
+      event.stopPropagation();
+      scroll.dataset.dragged = "";
+    }, true);
+    scroll.addEventListener("wheel", (event) => {
+      if (scroll.scrollWidth <= scroll.clientWidth + 1) return;
+      scroll.scrollLeft += event.deltaY || event.deltaX;
+      event.preventDefault();
+    }, { passive: false });
+  }
+
+  function applyMenuShortcuts() {
+    const bloc = B();
+    if (!bloc) return;
+    [
+      ["export", "shortcut-export", bloc.state.showExport !== false],
+      ["import", "shortcut-import", bloc.state.showImport !== false],
+    ].forEach(([menu, id, on]) => {
+      const row = document.querySelector(`[data-menu="${menu}"]`);
+      if (row) row.hidden = !on;
+      const box = document.getElementById(id);
+      if (!box) return;
+      box.classList.toggle("is-on", on);
+      box.setAttribute("aria-pressed", String(on));
+    });
+    applyToolChrome();
+  }
 
   function applyTheme(theme) {
     document.body.classList.toggle("theme-dark", theme === "dark");
-    const btn = document.getElementById("btn-theme");
-    const icon = document.getElementById("theme-icon");
+    const box = document.getElementById("theme-dark");
     const dark = theme === "dark";
-    if (icon) icon.innerHTML = dark ? themeSun : themeMoon;
-    if (btn) {
-      btn.setAttribute("aria-pressed", String(dark));
-      btn.setAttribute("aria-label", dark ? "Tema claro" : "Tema oscuro");
+    if (box) {
+      box.classList.toggle("is-on", dark);
+      box.setAttribute("aria-pressed", String(dark));
     }
   }
+
+  function closeShortcuts() {
+    document.body.classList.remove("shortcuts-open");
+    const page = document.getElementById("shortcuts-page");
+    if (page) page.hidden = true;
+    const account = document.getElementById("account-modal");
+    const stay = document.body.classList.contains("pay-open")
+      || document.body.classList.contains("prices-open")
+      || (account && !account.hidden);
+    if (!stay) document.body.classList.remove("account-open");
+    const title = document.querySelector("#account-bar h2");
+    if (title && !stay) title.textContent = "Cuenta";
+  }
+
+  function openShortcuts() {
+    window.closeBlocAccount?.();
+    window.closeBlocPay?.();
+    window.closeBlocPrices?.();
+    const page = document.getElementById("shortcuts-page");
+    if (page) page.hidden = false;
+    document.body.classList.add("account-open", "shortcuts-open");
+    const title = document.querySelector("#account-bar h2");
+    if (title) title.textContent = "Accesos directos";
+    applyTheme(B()?.state.theme || "light");
+    applyMenuShortcuts();
+    bindToolDrag();
+  }
+
+  window.closeBlocShortcuts = closeShortcuts;
+  window.openBlocShortcuts = openShortcuts;
 
   function closeAppMenu() {
     const menu = document.getElementById("app-menu");
@@ -203,6 +353,10 @@
     if (cardField) cardField.value = String(cardSize);
     const soundBox = document.getElementById("alarm-sound");
     if (soundBox) soundBox.checked = bloc.state.sound !== false;
+    const continuous = document.getElementById("alarm-continuous");
+    if (continuous) continuous.checked = bloc.state.alarmContinuous === true;
+    const extra = document.getElementById("alarm-continuous-opts");
+    if (extra) extra.hidden = bloc.state.alarmContinuous !== true;
     const fullBox = document.getElementById("open-full");
     if (fullBox) fullBox.checked = bloc.state.showDetail === false;
     const panelBox = document.getElementById("show-panel");
@@ -358,6 +512,7 @@
     const bloc = B();
     if (!bloc) return;
     applyTheme(bloc.state.theme || "light");
+    applyMenuShortcuts();
     wireSnoozeChips();
     renderTemplateBar();
   };
@@ -369,14 +524,37 @@
     wired = true;
 
     applyTheme(bloc.state.theme || "light");
+    applyMenuShortcuts();
+    bindToolDrag();
     renderTemplateBar();
 
-    document.getElementById("btn-theme")?.addEventListener("click", () => {
-      bloc.state.theme = bloc.state.theme === "dark" ? "light" : "dark";
+    document.getElementById("theme-dark")?.addEventListener("click", () => {
+      const dark = bloc.state.theme !== "dark";
+      bloc.state.theme = dark ? "dark" : "light";
       bloc.save();
       applyTheme(bloc.state.theme);
-      closeAppMenu();
     });
+    document.getElementById("shortcut-export")?.addEventListener("click", () => {
+      bloc.state.showExport = bloc.state.showExport === false;
+      bloc.save();
+      applyMenuShortcuts();
+    });
+    document.getElementById("shortcut-import")?.addEventListener("click", () => {
+      bloc.state.showImport = bloc.state.showImport === false;
+      bloc.save();
+      applyMenuShortcuts();
+    });
+    document.getElementById("shortcut-hide-tools")?.addEventListener("click", () => {
+      bloc.state.hideTools = bloc.state.hideTools !== true;
+      bloc.save();
+      applyToolChrome();
+    });
+    document.getElementById("shortcut-hide-editor")?.addEventListener("click", () => {
+      bloc.state.hideEditor = bloc.state.hideEditor !== true;
+      bloc.save();
+      applyToolChrome();
+    });
+    document.getElementById("shortcuts-back")?.addEventListener("click", closeShortcuts);
 
     const appMenu = document.getElementById("app-menu");
     document.getElementById("btn-app-menu")?.addEventListener("click", (e) => {
@@ -428,6 +606,10 @@
       if (e.target.id === "info-modal") e.currentTarget.hidden = true;
     });
     function goHome() {
+      if (document.body.classList.contains("shortcuts-open")) {
+        closeShortcuts();
+        return;
+      }
       const api = B();
       if (api?.state.focusOpen) {
         api.closeFocus();
@@ -446,9 +628,11 @@
       }
       window.closeBlocAccount?.();
       window.closeBlocPay?.();
+      window.closeBlocShortcuts?.();
     }
     document.getElementById("btn-back-home")?.addEventListener("click", goHome);
     appMenu?.addEventListener("click", (e) => {
+      if (e.target.closest(".info-ico")) return;
       const kind = e.target.closest("[data-menu]")?.dataset.menu;
       if (kind === "home") goHome();
       if (kind === "export") exportCopy();
@@ -456,7 +640,8 @@
       if (kind === "editor") openTemplateLook();
       if (kind === "account") window.openBlocAccount?.();
       if (kind === "pay") window.openBlocPay?.();
-      if (kind && kind !== "account" && kind !== "pay") {
+      if (kind === "shortcuts") window.openBlocShortcuts?.();
+      if (kind && kind !== "account" && kind !== "pay" && kind !== "shortcuts") {
         window.closeBlocAccount?.();
         window.closeBlocPay?.();
       }
@@ -696,6 +881,11 @@
       bloc.state.cardSize = Number(e.target.value);
       bloc.save();
       applyTemplateLook();
+    });
+    document.getElementById("tool-size")?.addEventListener("input", (e) => {
+      bloc.state.toolSize = Number(e.target.value);
+      bloc.save();
+      applyToolChrome();
     });
     document.getElementById("alarm-sound")?.addEventListener("change", async (e) => {
       const next = e.target.checked;

@@ -150,8 +150,16 @@
       el.className = `sub-status sub-status-${view.kind}`;
       el.innerHTML = `<small>Suscripción</small><strong>${escapeHtml(view.title)}</strong><span>${escapeHtml(view.detail)}</span>`;
     });
+    const perks = document.getElementById("plan-perks");
     const copy = document.getElementById("plan-copy");
-    if (copy) copy.textContent = data?.plan?.description || "";
+    const items = String(data?.plan?.description || "")
+      .replace(/\.\s*$/, "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => item.charAt(0).toLocaleUpperCase("es") + item.slice(1));
+    if (perks) perks.hidden = !items.length;
+    if (copy) copy.innerHTML = items.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
     const periods = document.getElementById("plan-periods");
     const useBalance = document.getElementById("plan-use-balance");
     if (useBalance) useBalance.hidden = inApp() || data?.admin || data?.permanent;
@@ -162,11 +170,20 @@
       return;
     }
     const rows = data?.plan?.periods || [];
-    periods.innerHTML = rows.map((item) => `
-      <button type="button" class="plan-period${chosen === item.id ? " is-on" : ""}" data-period="${escapeHtml(item.id)}" data-price="${item.price}">
+    const best = rows.reduce((top, item) => (Number(item.discount) > Number(top?.discount || 0) ? item : top), null);
+    const picked = rows.find((item) => item.id === chosen);
+    if (useBalance) useBalance.textContent = picked ? `Activar ${picked.label}` : "Activar con saldo";
+    periods.innerHTML = rows.map((item) => {
+      const on = chosen === item.id;
+      const featured = Boolean(best && item.id === best.id && Number(item.discount) > 0);
+      const meta = on ? "Elegido" : (item.discount ? `${item.discount}% menos` : "Precio de lista");
+      return `<button type="button" class="plan-offer${on ? " is-on" : ""}${featured ? " is-best" : ""}" data-period="${escapeHtml(item.id)}" data-price="${item.price}">
+        ${featured ? `<span class="plan-ribbon">Mejor precio</span>` : ""}
         <strong>${escapeHtml(item.label)}</strong>
-        <span>${money(item.price)}${item.discount ? ` · ${item.discount}% menos` : ""}</span>
-      </button>`).join("") + (inApp() ? "" : `<button type="button" class="plan-period${chosen === "" ? " is-on" : ""}" data-period="" data-price="">Solo recargar saldo</button>`);
+        <b>${money(item.price)}</b>
+        <span>${escapeHtml(meta)}</span>
+      </button>`;
+    }).join("") + (inApp() ? "" : `<button type="button" class="plan-reload${chosen === "" ? " is-on" : ""}" data-period="" data-price="">Solo recargar saldo</button>`);
     paintCoupons();
   }
 
@@ -275,7 +292,7 @@
     list.innerHTML = rows.length ? rows.map((row) => {
       const bits = PRICE_BITS.map(([key, label]) => `${label} ${money(row.prices?.[key])}`).join(" · ");
       const remove = row.id === "principal" ? "" : `<button type="button" class="user-ico user-ico-delete" data-price-delete="${escapeHtml(row.id)}" data-price-name="${escapeHtml(row.name || "Precio")}" aria-label="Eliminar"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M5 7.4h14"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M9.2 7.2V5.4h5.6v1.8"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M7.4 7.4 8.3 19h7.4l.9-11.6"/></svg></button>`;
-      return `<li class="user-row price-row" data-price-open="${escapeHtml(row.id)}"><span class="user-name">${escapeHtml(row.name || "Precio")}<span class="price-bits">${bits}</span></span>${remove}</li>`;
+      return `<li class="user-row price-row${row.id === "principal" ? " price-main" : ""}" data-price-open="${escapeHtml(row.id)}"><span class="user-name">${escapeHtml(row.name || "Precio")}<span class="price-bits">${bits}</span></span>${remove}</li>`;
     }).join("") : `<li class="user-empty">Todavía no hay precios.</li>`;
   }
 
@@ -648,7 +665,12 @@
     try {
       await send("/api/subscription/play", { period, token });
       note("Compra de Google Play activa.");
+      window.BlocNative?.playDone?.(token);
     } catch (error) {
+      if (String(error.message || "").includes("ya se usó")) {
+        window.BlocNative?.playDone?.(token);
+        return;
+      }
       note(error.message, true);
     }
   };
@@ -660,9 +682,11 @@
 
   window.openBlocPay = function openBlocPay() {
     window.closeBlocAccount?.();
-    document.body.classList.remove("prices-open");
+    document.body.classList.remove("prices-open", "shortcuts-open");
     const prices = document.getElementById("prices-page");
     if (prices) prices.hidden = true;
+    const shortcuts = document.getElementById("shortcuts-page");
+    if (shortcuts) shortcuts.hidden = true;
     const page = document.getElementById("pay-page");
     if (page) page.hidden = false;
     document.body.classList.add("account-open", "pay-open");
@@ -683,6 +707,7 @@
 
   window.openBlocPrices = function openBlocPrices() {
     window.closeBlocPay?.();
+    window.closeBlocShortcuts?.();
     const page = document.getElementById("prices-page");
     if (page) page.hidden = false;
     document.body.classList.add("account-open", "prices-open");

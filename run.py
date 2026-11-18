@@ -501,8 +501,11 @@ def send_mail(to, subject, body, html=None):
         return False
     try:
         message = EmailMessage()
+        sender = cfg["from"]
+        if "<" not in sender:
+            sender = f"Bloc <{sender}>"
         message["Subject"] = subject
-        message["From"] = cfg["from"]
+        message["From"] = sender
         message["To"] = to
         message.set_content(body)
         if html:
@@ -523,25 +526,40 @@ def send_mail(to, subject, body, html=None):
         return False
 
 
-def send_reset(to, link):
+def request_origin(handler):
+    host = (handler.headers.get("Host") or f"127.0.0.1:{PORT}").split(",")[0].strip()
+    proto = (handler.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip().lower()
+    name = host.split(":")[0].lower()
+    local = name in ("127.0.0.1", "localhost") or name.startswith(("10.", "192.168.", "172."))
+    if proto not in ("http", "https"):
+        proto = "http" if local else "https"
+    return f"{proto}://{host}"
+
+
+def mail_card(title, text, button, link):
     safe = html.escape(link, quote=True)
-    page = f"""<!DOCTYPE html>
+    title_safe = html.escape(title)
+    text_safe = html.escape(text)
+    button_safe = html.escape(button)
+    return f"""<!DOCTYPE html>
 <html lang="es">
+<head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#f6f1e8;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">{text_safe}</div>
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f1e8;padding:32px 12px;">
     <tr><td align="center">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:460px;background:#fffdf8;border:2px solid #1a1814;border-radius:22px;">
         <tr><td style="background:#1a1814;border-radius:20px 20px 0 0;padding:22px 24px;text-align:center;">
-          <p style="margin:0;font-family:Georgia,serif;font-size:28px;color:#f6efe4;">notas tupremiumm</p>
+          <p style="margin:0;font-family:Georgia,serif;font-size:24px;color:#f6efe4;white-space:nowrap;">notas tupremiumm</p>
         </td></tr>
         <tr><td style="padding:28px 28px 8px;font-family:Georgia,serif;font-size:26px;color:#1a1814;text-align:center;">
-          Recupera tu contraseña
+          {title_safe}
         </td></tr>
         <tr><td style="padding:8px 28px 22px;font-family:Arial,sans-serif;font-size:16px;line-height:1.5;color:#3d3832;text-align:center;">
-          Alguien pidió una contraseña nueva para tu cuenta. El enlace vale 1 hora. Si no fuiste tú, ignora este correo.
+          {text_safe}
         </td></tr>
         <tr><td align="center" style="padding:0 28px 28px;">
-          <a href="{safe}" style="display:inline-block;background:#1a1814;color:#f7f1e6;text-decoration:none;font-family:Arial,sans-serif;font-size:16px;padding:14px 28px;border-radius:999px;">Elegir contraseña nueva</a>
+          <a href="{safe}" style="display:inline-block;background:#1a1814;color:#f7f1e6;text-decoration:none;font-family:Arial,sans-serif;font-size:16px;padding:14px 28px;border-radius:999px;white-space:nowrap;">{button_safe}</a>
         </td></tr>
         <tr><td style="padding:0 28px 28px;font-family:Arial,sans-serif;font-size:13px;line-height:1.4;color:#6d645b;text-align:center;">
           Si el botón no abre, copia este enlace:<br>
@@ -552,6 +570,22 @@ def send_reset(to, link):
   </table>
 </body>
 </html>"""
+
+
+def send_verify(to, link):
+    text = "Tu cuenta ya está creada. Confirma el correo para poder entrar. Este enlace vale 24 horas. Si no pediste la cuenta, ignora este mensaje."
+    page = mail_card("Confirma tu cuenta", text, "Confirmar cuenta", link)
+    return send_mail(
+        to,
+        "Confirma tu cuenta de Bloc",
+        "Confirma tu cuenta de Bloc.\n\n" + text + "\n\n" + link + "\n",
+        page,
+    )
+
+
+def send_reset(to, link):
+    text = "Alguien pidió una contraseña nueva para tu cuenta. El enlace vale 1 hora. Si no fuiste tú, ignora este correo."
+    page = mail_card("Recupera tu contraseña", text, "Elegir contraseña nueva", link)
     return send_mail(
         to,
         "Recupera tu contraseña de notas tupremiumm",
@@ -811,9 +845,8 @@ class Handler(SimpleHTTPRequestHandler):
             store["users"][uid] = user
             apply_roles(store)
             write_store(store)
-            host = self.headers.get("Host") or f"127.0.0.1:{PORT}"
-            link = f"http://{host}/?verify={token}"
-        if not send_mail(email, "Confirma tu cuenta de Bloc", "Abre este enlace para confirmar el correo. Vale durante 24 horas.\n\n" + link + "\n"):
+            link = request_origin(self) + "/?verify=" + token
+        if not send_verify(email, link):
             with LOCK:
                 store = load_store()
                 store["users"].pop(uid, None)
@@ -866,8 +899,7 @@ class Handler(SimpleHTTPRequestHandler):
             token = secrets.token_urlsafe(24)
             user["reset"] = {"token": token, "expires": time.time() + 3600}
             write_store(store)
-            host = self.headers.get("Host") or f"127.0.0.1:{PORT}"
-            link = f"http://{host}/?reset={token}"
+            link = request_origin(self) + "/?reset=" + token
         if not send_reset(email, link):
             self.send_json(400, {"error": "No se pudo enviar el correo. Revisa el SMTP."})
             return

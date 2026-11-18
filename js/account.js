@@ -303,10 +303,14 @@
   }
 
   function openAccount() {
-    document.body.classList.remove("prices-open");
+    document.body.classList.remove("prices-open", "shortcuts-open");
     const prices = document.getElementById("prices-page");
     if (prices) prices.hidden = true;
+    const shortcuts = document.getElementById("shortcuts-page");
+    if (shortcuts) shortcuts.hidden = true;
     window.closeBlocPay?.();
+    const title = document.querySelector("#account-bar h2");
+    if (title) title.textContent = "Cuenta";
     renderAccount();
     document.body.classList.add("account-open");
     const modal = document.getElementById("account-modal");
@@ -332,11 +336,13 @@
 
   function closeAccount() {
     if (!session()) return;
-    document.body.classList.remove("account-open", "prices-open");
+    document.body.classList.remove("account-open", "prices-open", "shortcuts-open");
     const modal = document.getElementById("account-modal");
     if (modal) modal.hidden = true;
     const prices = document.getElementById("prices-page");
     if (prices) prices.hidden = true;
+    const shortcuts = document.getElementById("shortcuts-page");
+    if (shortcuts) shortcuts.hidden = true;
     const priceEdit = document.getElementById("price-edit-modal");
     if (priceEdit) priceEdit.hidden = true;
     const title = document.querySelector("#account-bar h2");
@@ -667,6 +673,9 @@
   });
   document.getElementById("logout-close")?.addEventListener("click", () => {
     document.getElementById("logout-modal").hidden = true;
+  });
+  document.getElementById("logout-modal")?.addEventListener("pointerdown", (event) => {
+    if (event.target.id === "logout-modal") document.getElementById("logout-modal").hidden = true;
   });
   document.querySelectorAll("[data-logout]").forEach((button) => {
     button.addEventListener("click", (event) => {
