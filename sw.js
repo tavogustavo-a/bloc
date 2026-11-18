@@ -1,4 +1,4 @@
-const CACHE = "bloc-shell-262";
+const CACHE = "bloc-shell-263";
 const SHELL = [
   "./",
   "./index.html",
