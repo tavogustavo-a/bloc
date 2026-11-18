@@ -5,6 +5,7 @@
   let quiet = false;
   let pushing = false;
   let pending = false;
+  let replaceNext = false;
   let timer = null;
 
   const bloc = () => window.Bloc;
@@ -78,6 +79,19 @@
     return writeBackups([copy, ...items]);
   }
 
+  function restoreCopy(copy) {
+    const api = bloc();
+    if (!api || !copy) return;
+    quiet = true;
+    api.applyRemoteState(copy.state);
+    quiet = false;
+    setRev(Date.now());
+    updateTodayBackup();
+    replaceNext = true;
+    schedulePush();
+    renderAccount();
+  }
+
   function createManualBackup() {
     const api = bloc();
     if (!api) return;
@@ -129,14 +143,25 @@
     if (guest) guest.hidden = Boolean(current);
     if (inside) inside.hidden = !current;
     const who = document.getElementById("account-who");
-    if (who && current) {
-      const name = current.username || current.email;
-      const role = current.role === "admin" ? " · admin" : current.role === "super" ? " · super" : current.role === "registro" ? " · registro" : "";
-      who.textContent = `${name}${role}`;
-    }
+    if (who && current) who.textContent = current.username || current.email || "";
+    const full = document.getElementById("backup-full");
+    if (full) full.hidden = current?.role !== "admin";
+    const coupons = document.getElementById("coupon-admin");
+    if (coupons) coupons.hidden = current?.role !== "admin";
+    const pricesBtn = document.getElementById("open-prices");
+    if (pricesBtn) pricesBtn.hidden = current?.role !== "admin";
     const admin = document.getElementById("account-admin");
     const staff = current?.role === "admin" || current?.role === "super";
     if (admin) admin.hidden = !staff;
+    const createBox = document.getElementById("admin-create-box");
+    const kind = document.getElementById("admin-kind");
+    if (current?.role === "super") {
+      if (createBox) createBox.hidden = true;
+      if (kind) kind.hidden = true;
+    } else if (current?.role === "admin") {
+      if (createBox) createBox.hidden = false;
+      if (kind) kind.hidden = false;
+    }
     const deleteAccount = document.getElementById("account-delete");
     if (deleteAccount) {
       const blocked = current?.role === "admin";
@@ -222,18 +247,21 @@
     pending = false;
     renderAccount();
     const sent = rev();
+    const replacing = replaceNext;
     try {
       const data = await api("/api/sync", {
         method: "POST",
         body: JSON.stringify({
           updatedAt: sent,
+          replace: replacing,
           state: apiBloc.snapshot(),
           backups: backups(),
           masterHash: localStorage.getItem("bloc-master") || "",
         }),
       });
+      if (replacing) replaceNext = false;
       quiet = true;
-      if (data.state) apiBloc.applyRemoteState(data.state);
+      if (data.state && !replaceNext) apiBloc.applyRemoteState(data.state);
       if (data.updatedAt) setRev(data.updatedAt);
       else if (Array.isArray(data.backups)) writeBackups([...backups(), ...data.backups]);
       quiet = false;
@@ -275,6 +303,9 @@
   }
 
   function openAccount() {
+    document.body.classList.remove("prices-open");
+    const prices = document.getElementById("prices-page");
+    if (prices) prices.hidden = true;
     window.closeBlocPay?.();
     renderAccount();
     document.body.classList.add("account-open");
@@ -301,9 +332,15 @@
 
   function closeAccount() {
     if (!session()) return;
-    document.body.classList.remove("account-open");
+    document.body.classList.remove("account-open", "prices-open");
     const modal = document.getElementById("account-modal");
     if (modal) modal.hidden = true;
+    const prices = document.getElementById("prices-page");
+    if (prices) prices.hidden = true;
+    const priceEdit = document.getElementById("price-edit-modal");
+    if (priceEdit) priceEdit.hidden = true;
+    const title = document.querySelector("#account-bar h2");
+    if (title) title.textContent = "Cuenta";
     const api = bloc();
     if (api && api.state.accountOpen) {
       api.state.accountOpen = false;
@@ -324,12 +361,34 @@
   window.restoreAccount = restoreAccount;
 
   window.closeBlocAccount = closeAccount;
+  window.refreshBlocUsers = () => loadUsers();
   window.openBlocAccount = openAccount;
 
   let userRows = [];
   let userQuery = "";
   let userPage = 1;
   let userSize = 5;
+  let actorCanCreate = false;
+  const PLAN_LABEL = { month: "1 mes", quarter: "3 meses", half: "6 meses", year: "1 año" };
+
+  function memberWhen(user) {
+    if (user.permanent) return "Permanente, sin cobro";
+    if (!user.until) return "Sin membresía";
+    const when = new Date(user.until).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" });
+    if (user.until > Date.now()) {
+      const name = PLAN_LABEL[user.periodId] || "Membresía";
+      return `${name} · vence el ${when}`;
+    }
+    return `Venció el ${when}`;
+  }
+
+  function showCreateBox() {
+    const box = document.getElementById("admin-create-box");
+    const kind = document.getElementById("admin-kind");
+    const role = session()?.role;
+    if (kind) kind.hidden = role !== "admin";
+    if (box) box.hidden = role === "super" ? !actorCanCreate : role !== "admin";
+  }
 
   function paintUsers() {
     const list = document.getElementById("user-list");
@@ -366,13 +425,17 @@
       const prices = user.listed
         ? `<small class="user-parent">Ve $${Math.round(user.listed).toLocaleString("es-CO")}${user.charged && user.charged !== user.listed ? ` · interno $${Math.round(user.charged).toLocaleString("es-CO")}` : ""}</small>`
         : "";
+      const member = `<small class="user-parent">${memberWhen(user)}</small>`;
+      const priceLine = user.role === "super" && user.priceName ? `<small class="user-parent">Precio ${String(user.priceName).replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[char]))}</small>` : "";
+      const apply = boss && !manage && !user.permanent ? `<select class="user-plan" data-user-plan="${user.id}" aria-label="Aplicar membresía"><option value="">Aplicar membresía</option><option value="month">1 mes</option><option value="quarter">3 meses</option><option value="half">6 meses</option><option value="year">1 año</option></select>` : "";
       const credit = boss ? `<button type="button" class="user-ico user-ico-credit" data-user-credit="${user.id}" aria-label="Sumar saldo"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><text x="2" y="16" fill="#fff" font-size="11" font-family="sans-serif">$</text><path fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" d="M16 7v10M11 12h10"/></svg></button>` : "";
       const tools = manage ? `<button type="button" class="switch${on ? " is-on" : ""}" data-user-active="${user.id}" data-username="${user.username || ""}" data-email="${user.email || ""}" aria-pressed="${on}" aria-label="${on ? "Desactivar" : "Activar"}" ${self ? "disabled" : ""}></button>
-        <button type="button" class="user-ico" data-user-edit="${user.id}" data-role="${user.role || "user"}" data-username="${user.username || ""}" data-email="${user.email || ""}" data-negative="${user.allowNegative ? "1" : "0"}" data-permanent="${user.permanent ? "1" : "0"}" aria-label="Editar"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 16.5 15.2 5.3a1.8 1.8 0 0 1 2.5 0l1 1a1.8 1.8 0 0 1 0 2.5L7.5 20H4v-3.5z"/></svg></button>
+        <button type="button" class="user-ico" data-user-edit="${user.id}" data-role="${user.role || "user"}" data-username="${user.username || ""}" data-email="${user.email || ""}" data-negative="${user.allowNegative ? "1" : "0"}" data-permanent="${user.permanent ? "1" : "0"}" data-create="${user.canCreateRegistro ? "1" : "0"}" data-price="${user.priceListId || "principal"}" aria-label="Editar"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 16.5 15.2 5.3a1.8 1.8 0 0 1 2.5 0l1 1a1.8 1.8 0 0 1 0 2.5L7.5 20H4v-3.5z"/></svg></button>
         <button type="button" class="user-ico user-ico-delete" data-user-delete="${user.id}" aria-label="Eliminar" ${self ? "disabled" : ""}><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M5 7.4h14"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M9.2 7.2V5.4h5.6v1.8"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M7.4 7.4 8.3 19h7.4l.9-11.6"/></svg></button>` : "";
       return `<li class="user-row">
-        <span class="user-name">${name}${kind}${parent}<small class="user-parent">Saldo ${saldo}</small>${prices}</span>
+        <span class="user-name">${name}${kind}${parent}<small class="user-parent">Saldo ${saldo}</small>${member}${priceLine}${prices}</span>
         ${credit}
+        ${apply}
         ${tools}
       </li>`;
     }).join("") || "<li class=\"user-empty\">No hay usuarios.</li>";
@@ -389,7 +452,13 @@
     try {
       const data = await api("/api/users");
       userRows = data.users || [];
+      actorCanCreate = Boolean(data.canCreate);
+      showCreateBox();
       paintUsers();
+      const week = 7 * 24 * 60 * 60 * 1000;
+      const day = 24 * 60 * 60 * 1000;
+      const soon = userRows.filter((user) => user.until && !user.permanent && user.until - Date.now() <= week && user.until - Date.now() >= -day);
+      window.setMembershipNotices?.(soon);
     } catch {
       list.innerHTML = "<li class=\"user-empty\">No se pudo cargar la lista.</li>";
     }
@@ -717,7 +786,7 @@
           username,
           email,
           password,
-          role: document.getElementById("admin-kind")?.value || "registro",
+          role: session()?.role === "admin" ? (document.getElementById("admin-kind")?.value || "registro") : "registro",
         }),
       });
       document.getElementById("admin-create").reset();
@@ -753,6 +822,24 @@
       }
     }
   });
+  document.getElementById("open-prices")?.addEventListener("click", () => window.openBlocPrices?.());
+  document.getElementById("user-list")?.addEventListener("change", async (event) => {
+    const pick = event.target.closest("[data-user-plan]");
+    if (!pick) return;
+    const period = pick.value;
+    pick.value = "";
+    if (!period) return;
+    const row = userRows.find((item) => item.id === pick.dataset.userPlan);
+    const who = row?.username || row?.email || "este usuario";
+    const label = PLAN_LABEL[period] || "la membresía";
+    if (!confirm(`¿Activar ${label} para ${who}? Se descuenta del saldo de ese usuario.`)) return;
+    try {
+      await api("/api/users/membership", { method: "POST", body: JSON.stringify({ id: pick.dataset.userPlan, period }) });
+      loadUsers();
+    } catch (error) {
+      accountNotice(error.message || "No se pudo activar la membresía.");
+    }
+  });
   document.getElementById("user-list")?.addEventListener("click", async (event) => {
     const credit = event.target.closest("[data-user-credit]");
     if (credit) {
@@ -768,6 +855,8 @@
       input?.focus();
       return;
     }
+    const planPick = event.target.closest("[data-user-plan]");
+    if (planPick) return;
     const toggle = event.target.closest("[data-user-active]");
     const edit = event.target.closest("[data-user-edit]");
     const remove = event.target.closest("[data-user-delete]");
@@ -804,14 +893,19 @@
       if (permanent) permanent.checked = edit.dataset.permanent === "1";
       const rolePick = document.getElementById("user-edit-role");
       if (rolePick) rolePick.value = ["super", "google", "registro"].includes(edit.dataset.role) ? edit.dataset.role : "registro";
+      const createRow = document.getElementById("user-edit-create-row");
+      const createBox = document.getElementById("user-edit-create");
+      if (createRow) createRow.hidden = rolePick?.value !== "super";
+      if (createBox) createBox.checked = edit.dataset.create === "1";
+      const price = document.getElementById("user-edit-price");
+      if (price) {
+        price.hidden = rolePick?.value !== "super";
+        window.fillPriceChoices?.(price, edit.dataset.price || "principal");
+      }
       const plan = document.getElementById("user-edit-plan");
       if (plan) plan.value = "";
-      const special = document.getElementById("user-edit-special");
-      if (special) special.hidden = rolePick?.value !== "super";
-      ["month", "quarter", "half", "year"].forEach((key) => {
-        const field = document.getElementById(`special-${key}`);
-        if (field) field.value = "";
-      });
+      window.fillPlanChoices?.(plan);
+      syncPermanent();
       const note = document.getElementById("user-edit-error");
       if (note) note.hidden = true;
       document.getElementById("user-edit-modal").hidden = false;
@@ -833,9 +927,17 @@
     if (event.target.id === "user-edit-modal") document.getElementById("user-edit-modal").hidden = true;
   });
   document.getElementById("user-edit-role")?.addEventListener("change", (event) => {
-    const special = document.getElementById("user-edit-special");
-    if (special) special.hidden = event.target.value !== "super";
+    const createRow = document.getElementById("user-edit-create-row");
+    if (createRow) createRow.hidden = event.target.value !== "super";
+    const price = document.getElementById("user-edit-price");
+    if (price) price.hidden = event.target.value !== "super";
   });
+  function syncPermanent() {
+    const plan = document.getElementById("user-edit-plan");
+    const on = Boolean(document.getElementById("user-edit-permanent")?.checked);
+    if (plan) plan.hidden = on;
+  }
+  document.getElementById("user-edit-permanent")?.addEventListener("change", syncPermanent);
   document.getElementById("user-edit-save")?.addEventListener("click", async () => {
     const note = document.getElementById("user-edit-error");
     const fail = (text) => { if (note) { note.hidden = !text; note.textContent = text || ""; } };
@@ -850,13 +952,9 @@
           role: ["super", "google", "registro"].includes(document.getElementById("user-edit-role")?.value) ? document.getElementById("user-edit-role").value : "registro",
           allowNegative: Boolean(document.getElementById("user-edit-negative")?.checked),
           permanent: Boolean(document.getElementById("user-edit-permanent")?.checked),
-          membership: document.getElementById("user-edit-plan")?.value || "",
-          specialPrices: {
-            month: document.getElementById("special-month")?.value || "",
-            quarter: document.getElementById("special-quarter")?.value || "",
-            half: document.getElementById("special-half")?.value || "",
-            year: document.getElementById("special-year")?.value || "",
-          },
+          canCreateRegistro: document.getElementById("user-edit-role")?.value === "super" && Boolean(document.getElementById("user-edit-create")?.checked),
+          priceListId: document.getElementById("user-edit-role")?.value === "super" ? (document.getElementById("user-edit-price")?.value || "principal") : "principal",
+          membership: document.getElementById("user-edit-permanent")?.checked ? "" : (document.getElementById("user-edit-plan")?.value || ""),
         }),
       });
       document.getElementById("user-edit-modal").hidden = true;
@@ -933,9 +1031,9 @@
         imported: true,
         state,
       };
+      if (!confirm("¿Importar esta copia? Sustituye las notas de esta cuenta.")) return;
       writeBackups([copy, ...backups()]);
-      if (session()) schedulePush();
-      renderAccount();
+      restoreCopy(copy);
     } catch (error) {
       alert(error.message || "No se pudo importar la copia.");
     }
@@ -965,14 +1063,8 @@
     if (!button || !apiBloc) return;
     const copy = backups().find((item) => backupKey(item) === button.dataset.restore);
     if (!copy) return;
-    if (!confirm(`¿Restaurar la copia ${backupLabel(copy)}? Sustituye las notas de este equipo.`)) return;
-    quiet = true;
-    apiBloc.applyRemoteState(copy.state);
-    quiet = false;
-    setRev(Date.now());
-    updateTodayBackup();
-    schedulePush();
-    renderAccount();
+    if (!confirm(`¿Restaurar la copia ${backupLabel(copy)}? Sustituye las notas de esta cuenta.`)) return;
+    restoreCopy(copy);
   });
 
   document.addEventListener("bloc-saved", () => {

@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,620&family=Outfit:wght@380;500;640&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=220">
+  <link rel="stylesheet" href="css/styles.css?v=234">
   <script>
     try { if (!localStorage.getItem("bloc-cuenta")) document.documentElement.classList.add("locked-out"); } catch (e) {}
   </script>
@@ -59,6 +59,8 @@
           </button>
           <div id="notify-panel" class="notify-panel" hidden>
             <h3>Notificaciones</h3>
+            <p class="notify-label" id="notify-members-label" hidden>Por vencer</p>
+            <ul id="notify-members"></ul>
             <p class="notify-label">Van a pasar</p>
             <ul id="notify-upcoming"></ul>
             <p class="notify-label">Recientes</p>
@@ -455,6 +457,10 @@
         <input id="tpl-new-math" name="tpl-new-math" type="checkbox">
         Función matemática
       </label>
+      <label class="info-switch tpl-math-switch">
+        <input id="tpl-new-calendar" name="tpl-new-calendar" type="checkbox">
+        Calendario
+      </label>
       <div class="pos-row">
         <span>Posición</span>
         <input id="tpl-new-order" type="number" min="1" step="1" aria-label="Posición" name="tpl-new-order">
@@ -600,6 +606,10 @@
       <label class="info-switch tpl-math-switch">
         <input id="tpl-math" name="tpl-math" type="checkbox">
         Función matemática
+      </label>
+      <label class="info-switch tpl-math-switch">
+        <input id="tpl-calendar" name="tpl-calendar" type="checkbox">
+        Calendario
       </label>
       <div class="modal-actions">
         <button type="button" id="tpl-save" class="solid">Guardar plantilla</button>
@@ -906,13 +916,11 @@
         <input id="user-edit-mail" type="email" autocomplete="off" name="user-edit-mail" placeholder="Correo" aria-label="Correo">
         <div class="edit-type-row">
           <input id="user-edit-pass" type="password" autocomplete="new-password" placeholder="Contraseña nueva" aria-label="Contraseña nueva" name="user-edit-pass">
-          <label class="tpl-field" id="user-edit-role-field">Tipo
-            <select id="user-edit-role" name="user-edit-role" aria-label="Tipo de usuario">
-              <option value="registro">Registro</option>
-              <option value="google">Google</option>
-              <option value="super">Super</option>
-            </select>
-          </label>
+          <select id="user-edit-role" name="user-edit-role" aria-label="Tipo de usuario">
+            <option value="registro">Registro</option>
+            <option value="google">Google</option>
+            <option value="super">Super</option>
+          </select>
         </div>
         <select id="user-edit-plan" name="user-edit-plan" aria-label="Activar membresía">
           <option value="">Activar membresía</option>
@@ -921,17 +929,31 @@
           <option value="half">6 meses · $72.000</option>
           <option value="year">1 año · $126.000</option>
         </select>
-        <div id="user-edit-special" hidden>
-          <p class="color-note-title">Precio interno del super. El usuario ve el precio de arriba.</p>
-          <input id="special-month" type="text" inputmode="decimal" placeholder="1 mes, precio interno" aria-label="Precio interno 1 mes">
-          <input id="special-quarter" type="text" inputmode="decimal" placeholder="3 meses, precio interno" aria-label="Precio interno 3 meses">
-          <input id="special-half" type="text" inputmode="decimal" placeholder="6 meses, precio interno" aria-label="Precio interno 6 meses">
-          <input id="special-year" type="text" inputmode="decimal" placeholder="1 año, precio interno" aria-label="Precio interno 1 año">
-        </div>
+        <select id="user-edit-price" name="user-edit-price" aria-label="Precio del super" hidden>
+          <option value="principal">Principal</option>
+        </select>
         <label class="info-switch"><input id="user-edit-negative" type="checkbox" name="user-edit-negative"> Puede quedar con saldo negativo</label>
         <label class="info-switch"><input id="user-edit-permanent" type="checkbox" name="user-edit-permanent"> Permanente, sin cobro</label>
+        <label class="info-switch" id="user-edit-create-row" hidden><input id="user-edit-create" type="checkbox" name="user-edit-create"> Puede crear usuarios registro</label>
         <p id="user-edit-error" class="cal-conflict" hidden></p>
         <button type="button" id="user-edit-save" class="solid">Guardar</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="coupon-edit-modal" class="modal" hidden>
+    <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="coupon-edit-heading">
+      <div class="modal-head look-head">
+        <h2 id="coupon-edit-heading">Editar cupón</h2>
+        <button type="button" id="coupon-edit-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="coupon-edit-form" name="coupon-edit-form" class="login-field-stack" onsubmit="return false">
+        <input id="coupon-edit-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="Saldo del cupón" aria-label="Saldo del cupón" name="coupon-edit-amount">
+        <input id="coupon-edit-code" type="text" autocomplete="off" placeholder="Código" aria-label="Código del cupón" name="coupon-edit-code">
+        <input id="coupon-edit-uses" type="text" inputmode="numeric" autocomplete="off" placeholder="Número de usos" aria-label="Número de usos" name="coupon-edit-uses">
+        <input id="coupon-edit-days" type="text" inputmode="numeric" autocomplete="off" placeholder="Días, opcional" aria-label="Días desde que se crea" name="coupon-edit-days">
+        <p id="coupon-edit-error" class="cal-conflict" hidden></p>
+        <button type="button" id="coupon-edit-save" class="solid">Guardar</button>
       </form>
     </div>
   </div>
@@ -1038,18 +1060,11 @@
       </div>
       <div id="account-in" hidden>
         <div class="account-block">
-          <p id="account-sync" class="color-note-title" hidden></p>
-          <p id="account-balance" class="pay-balance">Saldo $0</p>
-          <p id="account-until" class="color-note-title"></p>
-          <form id="coupon-redeem" name="coupon-redeem" class="login-field-stack">
-            <input id="coupon-code" name="coupon-code" type="text" autocomplete="off" placeholder="Código del cupón" aria-label="Código del cupón">
-            <button type="submit" class="solid">Canjear cupón</button>
-            <p id="coupon-note" class="color-note-title" hidden></p>
-          </form>
-        </div>
-        <div class="account-block">
           <div id="account-admin" hidden>
-            <h3>Usuarios</h3>
+            <div class="section-line section-line-start">
+              <h3>Usuarios</h3>
+              <button type="button" id="open-prices" class="ghost tiny" hidden>Membresías</button>
+            </div>
           <div class="user-tools">
             <label class="search-wrap">
               <span class="sr">Buscar usuario</span>
@@ -1070,6 +1085,7 @@
             <span id="user-page">Página 1 de 1</span>
             <button type="button" id="user-next" class="solid">Siguiente</button>
           </div>
+          <div id="admin-create-box">
           <h3>Crear usuario</h3>
           <form id="admin-create" name="admin-create" class="login-field-stack">
             <input id="admin-user" name="admin-user" type="text" required placeholder="Usuario" aria-label="Usuario" autocomplete="username">
@@ -1092,19 +1108,10 @@
             <p id="admin-create-note" class="color-note-title" hidden></p>
           </form>
           </div>
-        </div>
-        <div class="account-block admin-only">
-          <h3>Crear cupón</h3>
-          <form id="coupon-create" name="coupon-create" class="login-field-stack">
-            <input id="coupon-amount" name="coupon-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="Saldo del cupón" aria-label="Saldo del cupón">
-            <input id="coupon-custom" name="coupon-custom" type="text" autocomplete="off" placeholder="Código, opcional" aria-label="Código del cupón">
-            <button type="submit" class="solid">Crear cupón</button>
-            <p id="coupon-create-note" class="color-note-title" hidden></p>
-          </form>
-          <ul id="coupon-list" class="pay-list"></ul>
+          </div>
         </div>
         <div class="account-block">
-          <div class="backup-full admin-only">
+          <div class="backup-full admin-only" id="backup-full" hidden>
             <button type="button" id="backup-import-all" class="solid">Importar absolutamente todo</button>
           </div>
           <div class="section-line">
@@ -1124,14 +1131,13 @@
         </div>
         <div class="account-block">
           <h3>Contraseña maestra</h3>
-          <p class="color-note-title">Sirve para las notas protegidas. Se crea una sola vez.</p>
+          <p class="color-note-title master-note">Sirve para las notas protegidas. Se crea una sola vez.</p>
           <div class="modal-actions">
             <button type="button" id="master-create-account" class="solid">Crear contraseña maestra</button>
             <button type="button" id="master-change-account" class="ghost" hidden>Cambiar contraseña maestra</button>
           </div>
-        </div>
-        <div class="account-block">
-        <h3>Cambiar contraseña</h3>
+          <div class="account-split"></div>
+          <h3>Cambiar contraseña</h3>
         <form id="password-form" name="password-form" class="login-field-stack">
           <input class="sr" type="text" id="password-user" name="username" autocomplete="username" tabindex="-1">
           <div class="pass-field">
@@ -1163,15 +1169,101 @@
           <button type="button" id="account-delete" class="ghost">Cerrar mi cuenta</button>
         </div>
         </div>
+        <div class="account-block">
+          <p id="account-sync" class="color-note-title" hidden></p>
+          <p id="account-balance" class="pay-balance">Saldo $0</p>
+          <div id="account-until" class="sub-status" hidden></div>
+          <form id="coupon-redeem" name="coupon-redeem" class="login-field-stack">
+            <input id="coupon-code" name="coupon-code" type="text" autocomplete="off" placeholder="Cupón" aria-label="Cupón">
+            <button type="submit" class="solid">Canjear</button>
+            <p id="coupon-note" class="color-note-title" hidden></p>
+          </form>
+          <div id="coupon-admin" hidden>
+          <div class="account-split"></div>
+          <h3>Crear cupón</h3>
+          <form id="coupon-create" name="coupon-create" class="login-field-stack">
+            <input id="coupon-amount" name="coupon-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="Saldo del cupón" aria-label="Saldo del cupón">
+            <input id="coupon-custom" name="coupon-custom" type="text" autocomplete="off" required placeholder="Código" aria-label="Código del cupón">
+            <input id="coupon-uses" name="coupon-uses" type="text" inputmode="numeric" autocomplete="off" required placeholder="Número de usos" aria-label="Número de usos">
+            <input id="coupon-days" name="coupon-days" type="text" inputmode="numeric" autocomplete="off" placeholder="Días, opcional" aria-label="Días desde que se crea">
+            <button type="submit" class="solid">Crear cupón</button>
+            <p id="coupon-create-note" class="color-note-title" hidden></p>
+          </form>
+          <div id="coupon-tools" class="user-tools" hidden>
+            <label class="search-wrap">
+              <span class="sr">Buscar cupón</span>
+              <input id="coupon-search" name="coupon-search" type="search" placeholder="Buscar cupón" autocomplete="off">
+              <button type="button" id="coupon-search-clear" class="search-clear" hidden aria-label="Borrar búsqueda">✕</button>
+            </label>
+            <select id="coupon-size" name="coupon-size" aria-label="Cuántos cupones">
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="0">Todos</option>
+            </select>
+          </div>
+          <ul id="coupon-list" class="user-rows"></ul>
+          <div id="coupon-pager" class="user-pager" hidden>
+            <button type="button" id="coupon-prev" class="solid">Anterior</button>
+            <span id="coupon-page">Página 1 de 1</span>
+            <button type="button" id="coupon-next" class="solid">Siguiente</button>
+          </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
+
+  <section id="prices-page" class="account-page" hidden>
+    <div class="account-block">
+      <div class="section-line">
+        <h3>Membresías</h3>
+        <button type="button" id="prices-back" class="ghost tiny">Volver</button>
+      </div>
+      <p class="color-note-title">El principal es el precio que ve el usuario. Los demás quedan para los super.</p>
+      <ul id="price-list" class="user-rows"></ul>
+      <h3>Crear precio</h3>
+      <form id="price-create" name="price-create" class="login-field-stack">
+        <input id="price-name" name="price-name" type="text" autocomplete="off" placeholder="Nombre del precio" aria-label="Nombre del precio">
+        <input id="price-month" name="price-month" type="text" inputmode="decimal" autocomplete="off" placeholder="1 mes" aria-label="Precio 1 mes">
+        <input id="price-quarter" name="price-quarter" type="text" inputmode="decimal" autocomplete="off" placeholder="3 meses" aria-label="Precio 3 meses">
+        <input id="price-half" name="price-half" type="text" inputmode="decimal" autocomplete="off" placeholder="6 meses" aria-label="Precio 6 meses">
+        <input id="price-year" name="price-year" type="text" inputmode="decimal" autocomplete="off" placeholder="1 año" aria-label="Precio 1 año">
+        <button type="submit" class="solid">Crear precio</button>
+        <p id="price-create-note" class="color-note-title" hidden></p>
+      </form>
+    </div>
+  </section>
+
+  <div id="price-edit-modal" class="modal" hidden>
+    <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="price-edit-heading">
+      <div class="modal-head look-head">
+        <h2 id="price-edit-heading">Editar precio</h2>
+        <button type="button" id="price-edit-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="price-edit-form" name="price-edit-form" onsubmit="return false">
+        <input id="price-edit-name" type="text" autocomplete="off" placeholder="Nombre" aria-label="Nombre del precio" name="price-edit-name">
+        <div class="price-grid">
+          <input id="price-edit-month" type="text" inputmode="decimal" autocomplete="off" placeholder="1 mes" aria-label="Precio 1 mes" name="price-edit-month">
+          <input id="price-edit-quarter" type="text" inputmode="decimal" autocomplete="off" placeholder="3 meses" aria-label="Precio 3 meses" name="price-edit-quarter">
+          <input id="price-edit-half" type="text" inputmode="decimal" autocomplete="off" placeholder="6 meses" aria-label="Precio 6 meses" name="price-edit-half">
+          <input id="price-edit-year" type="text" inputmode="decimal" autocomplete="off" placeholder="1 año" aria-label="Precio 1 año" name="price-edit-year">
+        </div>
+        <p id="price-edit-note" class="color-note-title">El usuario ve el precio principal.</p>
+        <p id="price-edit-error" class="cal-conflict" hidden></p>
+        <button type="button" id="price-edit-save" class="solid">Guardar</button>
+      </form>
+    </div>
+  </div>
 
   <section id="pay-page" class="account-page" hidden>
     <div class="account-block">
       <h3>Pagos</h3>
       <p id="pay-balance" class="pay-balance">Saldo $0</p>
-      <p id="pay-until" class="color-note-title"></p>
+      <div id="pay-until" class="sub-status" hidden></div>
       <div id="plan-box" class="plan-box">
         <h3 id="plan-name">Bloc</h3>
         <p id="plan-copy"></p>
@@ -1218,15 +1310,15 @@
     </div>
   </section>
 
-  <script src="js/app.js?v=95"></script>
-  <script src="js/features.js?v=85"></script>
-  <script src="js/account.js?v=77"></script>
+  <script src="js/app.js?v=97"></script>
+  <script src="js/features.js?v=86"></script>
+  <script src="js/account.js?v=83"></script>
   <script>
     if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
       navigator.serviceWorker.register("sw.js").catch(function () {});
     }
   </script>
-  <script src="js/payments.js?v=7"></script>
+  <script src="js/payments.js?v=14"></script>
   <script src="js/spend.js?v=17"></script>
 </body>
 </html>

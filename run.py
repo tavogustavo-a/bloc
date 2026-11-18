@@ -58,7 +58,7 @@ def pg_conn():
     import psycopg
     if _pg is None or _pg.closed:
         try:
-            _pg = psycopg.connect(database_url(), connect_timeout=3)
+            _pg = psycopg.connect(database_url(), connect_timeout=1)
         except Exception:
             _pg_down = True
             _pg = None
@@ -147,7 +147,7 @@ def load_store():
                 write_store(data)
             return data
         except Exception as exc:
-            print("PostgreSQL no respondió, se usan los archivos:", exc)
+            print("PostgreSQL no respondió, se usan los archivos.")
             _pg_down = True
             _users_snapshot = None
     data = empty_store()
@@ -572,6 +572,82 @@ def erase_later(user_id):
     threading.Thread(target=work, daemon=True).start()
 
 
+def coupon_code(value):
+    return re.sub(r"[^A-Za-z0-9]", "", str(value or "")).upper()[:16]
+
+
+def coupon_uses_of(item):
+    if item.get("uses") in (None, ""):
+        return 1
+    try:
+        return max(1, int(item.get("uses")))
+    except (TypeError, ValueError):
+        return 1
+
+
+def coupon_used_of(item):
+    if "usedCount" in item:
+        try:
+            return max(0, int(item.get("usedCount") or 0))
+        except (TypeError, ValueError):
+            return 0
+    return 1 if item.get("usedBy") else 0
+
+
+def coupon_days_of(item):
+    try:
+        return max(0, int(item.get("days") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def coupon_expired(item, now=None):
+    days = coupon_days_of(item)
+    created = int(item.get("createdAt") or 0)
+    if not days or not created:
+        return False
+    now = int(time.time() * 1000) if now is None else now
+    return now > created + days * 24 * 60 * 60 * 1000
+
+
+def read_coupon_limits(data):
+    raw_uses = str(data.get("uses") if data.get("uses") is not None else "").strip()
+    if not raw_uses:
+        return None, None, "Escribe el número de usos."
+    try:
+        uses = int(float(raw_uses))
+    except ValueError:
+        return None, None, "El número de usos debe ser un entero."
+    if uses < 1:
+        return None, None, "El número de usos debe ser al menos 1."
+    raw_days = str(data.get("days") or "").strip()
+    days = 0
+    if raw_days:
+        try:
+            days = int(float(raw_days))
+        except ValueError:
+            return None, None, "Los días deben ser un número."
+        if days < 1:
+            return None, None, "Los días deben ser al menos 1."
+    return uses, days, ""
+
+
+def coupon_public(item):
+    uses = coupon_uses_of(item)
+    used = coupon_used_of(item)
+    days = coupon_days_of(item)
+    return {
+        "code": item.get("code") or "",
+        "amount": item.get("amount") or 0,
+        "uses": uses,
+        "usedCount": used,
+        "days": days,
+        "active": item.get("active") is not False,
+        "expired": coupon_expired(item),
+        "used": used >= uses,
+    }
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -625,6 +701,7 @@ class Handler(SimpleHTTPRequestHandler):
             "/api/password": self.change_password,
             "/api/users/create": self.users_create,
             "/api/users/update": self.users_update,
+            "/api/users/membership": self.users_membership,
             "/api/users/credit": self.users_credit,
             "/api/users/delete": self.users_delete,
             "/api/admin/import": self.admin_import,
@@ -638,6 +715,10 @@ class Handler(SimpleHTTPRequestHandler):
             "/api/subscription/play": self.subscription_play,
             "/api/coupons/redeem": self.coupon_redeem,
             "/api/coupons/create": self.coupon_create,
+            "/api/coupons/update": self.coupon_update,
+            "/api/coupons/delete": self.coupon_delete,
+            "/api/prices/save": self.prices_save,
+            "/api/prices/delete": self.prices_delete,
             "/api/partner/coupons": self.partner_coupon,
         }
         handler = routes.get(path)
@@ -922,7 +1003,10 @@ class Handler(SimpleHTTPRequestHandler):
             incoming_at = int(data.get("updatedAt") or 0)
             stored_at = int(user.get("updatedAt") or 0)
             if isinstance(data.get("state"), dict):
-                user["state"] = merge_states(user.get("state") or {}, data["state"], incoming_at >= stored_at)
+                if data.get("replace") is True:
+                    user["state"] = data["state"]
+                else:
+                    user["state"] = merge_states(user.get("state") or {}, data["state"], incoming_at >= stored_at)
                 user["updatedAt"] = max(incoming_at, stored_at)
             user["backups"] = keep_backups(user.get("backups"), data.get("backups"))
             write_store(store)
@@ -1038,7 +1122,12 @@ class Handler(SimpleHTTPRequestHandler):
             uid = secrets.token_hex(8)
             role = "registro"
             kind = str(data.get("role") or "")
-            if actor.get("role") == "admin" and kind in ("super", "google", "registro"):
+            if actor.get("role") == "super":
+                if actor.get("canCreateRegistro") is not True:
+                    self.send_json(403, {"error": "No puedes crear usuarios registro."})
+                    return
+                role = "registro"
+            elif actor.get("role") == "admin" and kind in ("super", "google", "registro"):
                 role = kind
             elif kind == "google":
                 role = "google"
@@ -1078,6 +1167,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             names = {item.get("id"): (item.get("username") or item.get("email") or "") for item in store["users"].values()}
             pay = load_payments()
+            price_names = {row.get("id"): row.get("name") or "Precio" for row in ensure_price_lists(pay)[0]}
             people = []
             for item in store["users"].values():
                 if user.get("role") == "super" and item.get("parentId") != user.get("id"):
@@ -1093,11 +1183,16 @@ class Handler(SimpleHTTPRequestHandler):
                     "allowNegative": item.get("allowNegative") is True,
                     "permanent": item.get("permanent") is True,
                     "until": int(item.get("subscriptionUntil") or 0),
+                    "periodId": (item.get("membership") or {}).get("periodId") or item.get("periodId") or "",
                     "listed": int((item.get("membership") or {}).get("listed") or 0),
                     "charged": int((item.get("membership") or {}).get("charged") or 0),
+                    "canCreateRegistro": item.get("canCreateRegistro") is True,
+                    "priceListId": (item.get("priceListId") or "principal") if item.get("role") == "super" else "",
+                    "priceName": price_names.get(item.get("priceListId") or "principal", "Principal") if item.get("role") == "super" else "",
                 })
         people.sort(key=lambda item: (item["role"] != "admin", item["username"] or item["email"]))
-        self.send_json(200, {"users": people})
+        can_create = user.get("role") == "admin" or (user.get("role") == "super" and user.get("canCreateRegistro") is True)
+        self.send_json(200, {"users": people, "canCreate": can_create})
 
     def admin_export(self):
         with LOCK:
@@ -1132,8 +1227,8 @@ class Handler(SimpleHTTPRequestHandler):
             if not self.require_admin(store):
                 return
             write_store({"users": clean})
-            if isinstance(data.get("payments"), dict):
-                write_payments(data["payments"])
+            payments = data.get("payments") if isinstance(data.get("payments"), dict) else empty_payments()
+            write_payments(payments)
         self.send_json(200, {"ok": True})
 
     def require_admin(self, store):
@@ -1212,17 +1307,20 @@ class Handler(SimpleHTTPRequestHandler):
                     target["allowNegative"] = bool(data.get("allowNegative"))
                 if "permanent" in data:
                     target["permanent"] = bool(data.get("permanent"))
-                if target.get("role") == "super" and isinstance(data.get("specialPrices"), dict):
-                    clean = {}
-                    for key in ("month", "quarter", "half", "year"):
-                        raw = data["specialPrices"].get(key)
-                        if raw in (None, ""):
-                            continue
-                        amount = parse_amount(raw)
-                        if amount is not None and amount >= 0:
-                            clean[key] = amount
-                    target["specialPrices"] = clean
+                if target.get("role") == "super" and "canCreateRegistro" in data:
+                    target["canCreateRegistro"] = bool(data.get("canCreateRegistro"))
+                elif target.get("role") != "super":
+                    target["canCreateRegistro"] = False
             pay = load_payments()
+            if target.get("role") == "super" and "priceListId" in data:
+                chosen = str(data.get("priceListId") or "principal") or "principal"
+                lists, _ = ensure_price_lists(pay)
+                if not any(row.get("id") == chosen for row in lists):
+                    self.send_json(400, {"error": "Ese precio no existe."})
+                    return
+                target["priceListId"] = chosen
+            elif target.get("role") != "super":
+                target.pop("priceListId", None)
             added = data.get("balanceAdd")
             if added not in (None, ""):
                 delta = parse_amount(added)
@@ -1236,7 +1334,7 @@ class Handler(SimpleHTTPRequestHandler):
                 payer = store["users"].get(target.get("parentId") or "") if target.get("parentId") else None
                 charged = None
                 if payer and payer.get("role") == "super":
-                    charged = special_price(payer, plan_period(period_id) or {})
+                    charged = list_price(pay, payer, plan_period(period_id, pay))
                 ok, result = activate_period(target, pay, period_id, charged=charged)
                 if not ok:
                     self.send_json(400, {"error": result})
@@ -1244,6 +1342,44 @@ class Handler(SimpleHTTPRequestHandler):
                 write_payments(pay)
             write_store(store)
         self.send_json(200, {"ok": True})
+
+    def users_membership(self):
+        try:
+            data = self.read_json()
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self.send_json(400, {"error": "No se pudo leer la membresía."})
+            return
+        uid = str(data.get("id") or "")
+        period_id = str(data.get("period") or "")
+        with LOCK:
+            store = load_store()
+            actor = self.require_manager(store)
+            if not actor:
+                return
+            target = store["users"].get(uid)
+            if not target:
+                self.send_json(404, {"error": "No está ese usuario."})
+                return
+            if actor.get("role") == "super" and target.get("parentId") != actor.get("id"):
+                self.send_json(403, {"error": "Solo puedes activar la membresía de tus usuarios."})
+                return
+            if target.get("permanent") is True or target.get("role") == "admin":
+                self.send_json(400, {"error": "Este usuario no necesita membresía."})
+                return
+            payer = actor if actor.get("role") == "super" else None
+            if payer is None and target.get("parentId"):
+                payer = store["users"].get(target.get("parentId") or "")
+            pay = load_payments()
+            charged = None
+            if payer and payer.get("role") == "super":
+                charged = list_price(pay, payer, plan_period(period_id, pay))
+            ok, result = activate_period(target, pay, period_id, charged=charged)
+            if not ok:
+                self.send_json(400, {"error": result})
+                return
+            write_payments(pay)
+            write_store(store)
+        self.send_json(200, {"ok": True, "until": int(target.get("subscriptionUntil") or 0)})
 
     def users_credit(self):
         try:
@@ -1308,9 +1444,10 @@ class Handler(SimpleHTTPRequestHandler):
             "admin": admin,
             "username": user.get("username") or user.get("email") or "",
             **access_view(store, pay, user),
-            "coupons": [
-                {"code": item.get("code"), "amount": item.get("amount"), "used": bool(item.get("usedBy"))}
-                for item in pay.get("coupons") or []
+            "coupons": [coupon_public(item) for item in pay.get("coupons") or []] if admin else [],
+            "priceLists": [
+                {"id": row.get("id"), "name": row.get("name") or "Precio", "prices": row.get("prices") or {}}
+                for row in ensure_price_lists(pay)[0]
             ] if admin else [],
         }
 
@@ -1322,6 +1459,9 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_json(401, {"error": "Entra en tu cuenta."})
                 return
             pay = load_payments()
+            _, changed = ensure_price_lists(pay)
+            if changed:
+                write_payments(pay)
             admin = user.get("role") == "admin"
             self.send_json(200, self.payments_view(store, pay, user, admin))
 
@@ -1525,7 +1665,14 @@ class Handler(SimpleHTTPRequestHandler):
         if amount is None:
             self.send_json(400, {"error": "Escribe el saldo del cupón."})
             return
-        code = re.sub(r"[^A-Za-z0-9]", "", str(data.get("code") or "")).upper()[:16] or secrets.token_hex(4).upper()
+        code = coupon_code(data.get("code"))
+        if not code:
+            self.send_json(400, {"error": "Escribe el código del cupón."})
+            return
+        uses, days, limit_error = read_coupon_limits(data)
+        if limit_error:
+            self.send_json(400, {"error": limit_error})
+            return
         with LOCK:
             store = load_store()
             user = self.user_by_token(store)
@@ -1539,6 +1686,10 @@ class Handler(SimpleHTTPRequestHandler):
             pay["coupons"].insert(0, {
                 "code": code,
                 "amount": amount,
+                "uses": uses,
+                "days": days,
+                "usedCount": 0,
+                "active": True,
                 "note": str(data.get("note") or "")[:80],
                 "createdAt": int(time.time() * 1000),
                 "usedBy": "",
@@ -1552,7 +1703,7 @@ class Handler(SimpleHTTPRequestHandler):
         except (json.JSONDecodeError, UnicodeDecodeError):
             self.send_json(400, {"error": "No se pudo leer el cupón."})
             return
-        code = re.sub(r"[^A-Za-z0-9]", "", str(data.get("code") or "")).upper()
+        code = coupon_code(data.get("code"))
         if not code:
             self.send_json(400, {"error": "Escribe el código."})
             return
@@ -1564,14 +1715,164 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             pay = load_payments()
             coupon = next((item for item in pay["coupons"] if item.get("code") == code), None)
-            if not coupon or coupon.get("usedBy"):
+            if not coupon or coupon.get("active") is False or coupon_expired(coupon) or coupon_used_of(coupon) >= coupon_uses_of(coupon):
                 self.send_json(404, {"error": "Ese cupón no está disponible."})
                 return
+            coupon["usedCount"] = coupon_used_of(coupon) + 1
             coupon["usedBy"] = user.get("id")
             coupon["usedAt"] = int(time.time() * 1000)
             set_wallet(pay, user.get("id"), wallet_of(pay, user.get("id")) + float(coupon.get("amount") or 0))
             write_payments(pay)
             self.send_json(200, self.payments_view(store, pay, user, user.get("role") == "admin"))
+
+    def coupon_update(self):
+        try:
+            data = self.read_json()
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self.send_json(400, {"error": "No se pudo leer el cupón."})
+            return
+        code = coupon_code(data.get("code"))
+        if not code:
+            self.send_json(400, {"error": "Escribe el código del cupón."})
+            return
+        with LOCK:
+            store = load_store()
+            user = self.user_by_token(store)
+            if not user or user.get("role") != "admin":
+                self.send_json(403, {"error": "Solo el administrador edita cupones."})
+                return
+            pay = load_payments()
+            coupon = next((item for item in pay["coupons"] if item.get("code") == code), None)
+            if not coupon:
+                self.send_json(404, {"error": "Ese cupón no existe."})
+                return
+            if "active" in data and "amount" not in data:
+                coupon["active"] = bool(data.get("active"))
+                write_payments(pay)
+                self.send_json(200, {"ok": True})
+                return
+            amount = parse_amount(data.get("amount"))
+            if amount is None:
+                self.send_json(400, {"error": "Escribe el saldo del cupón."})
+                return
+            uses, days, limit_error = read_coupon_limits(data)
+            if limit_error:
+                self.send_json(400, {"error": limit_error})
+                return
+            if uses < coupon_used_of(coupon):
+                self.send_json(400, {"error": "Los usos no pueden ser menos de los que ya se canjearon."})
+                return
+            next_code = coupon_code(data.get("nextCode") or code)
+            if not next_code:
+                self.send_json(400, {"error": "Escribe el código del cupón."})
+                return
+            if next_code != code and any(item.get("code") == next_code for item in pay["coupons"]):
+                self.send_json(409, {"error": "Ese código ya existe."})
+                return
+            coupon["code"] = next_code
+            coupon["amount"] = amount
+            coupon["uses"] = uses
+            coupon["days"] = days
+            write_payments(pay)
+            self.send_json(200, {"ok": True})
+
+    def coupon_delete(self):
+        try:
+            data = self.read_json()
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self.send_json(400, {"error": "No se pudo leer el cupón."})
+            return
+        code = coupon_code(data.get("code"))
+        with LOCK:
+            store = load_store()
+            user = self.user_by_token(store)
+            if not user or user.get("role") != "admin":
+                self.send_json(403, {"error": "Solo el administrador elimina cupones."})
+                return
+            pay = load_payments()
+            before = len(pay["coupons"])
+            pay["coupons"] = [item for item in pay["coupons"] if item.get("code") != code]
+            if len(pay["coupons"]) == before:
+                self.send_json(404, {"error": "Ese cupón no existe."})
+                return
+            write_payments(pay)
+            self.send_json(200, {"ok": True})
+
+    def prices_save(self):
+        try:
+            data = self.read_json()
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self.send_json(400, {"error": "No se pudo leer el precio."})
+            return
+        amounts = read_amounts(data.get("prices"))
+        if not amounts:
+            self.send_json(400, {"error": "Escribe los cuatro precios."})
+            return
+        name = str(data.get("name") or "").strip()[:40]
+        pid = str(data.get("id") or "")
+        with LOCK:
+            store = load_store()
+            if not self.require_admin(store):
+                return
+            pay = load_payments()
+            lists, _ = ensure_price_lists(pay)
+            if pid == "principal":
+                main = next((row for row in lists if row.get("id") == "principal"), None)
+                if not main:
+                    self.send_json(404, {"error": "Ese precio no existe."})
+                    return
+                main["prices"] = amounts
+            elif pid:
+                item = next((row for row in lists if row.get("id") == pid), None)
+                if not item:
+                    self.send_json(404, {"error": "Ese precio no existe."})
+                    return
+                if not name:
+                    self.send_json(400, {"error": "Escribe el nombre del precio."})
+                    return
+                if any(row.get("name", "").lower() == name.lower() and row.get("id") != pid for row in lists):
+                    self.send_json(409, {"error": "Ya hay un precio con ese nombre."})
+                    return
+                item["name"] = name
+                item["prices"] = amounts
+            else:
+                if not name:
+                    self.send_json(400, {"error": "Escribe el nombre del precio."})
+                    return
+                if any(row.get("name", "").lower() == name.lower() for row in lists):
+                    self.send_json(409, {"error": "Ya hay un precio con ese nombre."})
+                    return
+                lists.append({"id": secrets.token_hex(4), "name": name, "prices": amounts})
+            pay["priceLists"] = lists
+            write_payments(pay)
+            self.send_json(200, self.payments_view(store, pay, self.user_by_token(store), True))
+
+    def prices_delete(self):
+        try:
+            data = self.read_json()
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self.send_json(400, {"error": "No se pudo leer el precio."})
+            return
+        pid = str(data.get("id") or "")
+        if pid == "principal":
+            self.send_json(400, {"error": "El precio principal no se elimina."})
+            return
+        with LOCK:
+            store = load_store()
+            if not self.require_admin(store):
+                return
+            pay = load_payments()
+            lists, _ = ensure_price_lists(pay)
+            if not any(row.get("id") == pid for row in lists):
+                self.send_json(404, {"error": "Ese precio no existe."})
+                return
+            pay["priceLists"] = [row for row in lists if row.get("id") != pid]
+            for person in store["users"].values():
+                if person.get("priceListId") == pid:
+                    person["priceListId"] = "principal"
+            write_payments(pay)
+            write_store(store)
+            self.send_json(200, self.payments_view(store, pay, self.user_by_token(store), True))
 
     def partner_coupon(self):
         if self.headers.get("X-Bloc-Key", "") != partner_key() or not partner_key():
@@ -1652,6 +1953,89 @@ def lan_urls():
     return [f"http://{ip}:{PORT}" for ip in found]
 
 
+PERIOD_SPECS = [
+    {"id": "month", "label": "1 mes", "months": 1, "discount": 0},
+    {"id": "quarter", "label": "3 meses", "months": 3, "discount": 10},
+    {"id": "half", "label": "6 meses", "months": 6, "discount": 20},
+    {"id": "year", "label": "1 año", "months": 12, "discount": 30},
+]
+DEFAULT_AMOUNTS = {"month": 15000, "quarter": 40500, "half": 72000, "year": 126000}
+
+
+def read_amounts(raw):
+    clean = {}
+    source = raw if isinstance(raw, dict) else {}
+    for key in DEFAULT_AMOUNTS:
+        amount = parse_amount(source.get(key))
+        if amount is None:
+            return None
+        clean[key] = int(amount)
+    return clean
+
+
+def ensure_price_lists(pay):
+    raw = pay.get("priceLists")
+    lists = [item for item in raw if isinstance(item, dict)] if isinstance(raw, list) else []
+    changed = not isinstance(raw, list) or len(lists) != len(raw)
+    main = next((item for item in lists if item.get("id") == "principal"), None)
+    if not main:
+        main = {"id": "principal", "name": "Principal", "prices": dict(DEFAULT_AMOUNTS)}
+        lists.insert(0, main)
+        changed = True
+    else:
+        prices = main.get("prices") if isinstance(main.get("prices"), dict) else {}
+        fixed = {key: int(prices.get(key) or DEFAULT_AMOUNTS[key]) for key in DEFAULT_AMOUNTS}
+        if main.get("name") != "Principal" or main.get("prices") != fixed:
+            main["name"] = "Principal"
+            main["prices"] = fixed
+            changed = True
+    clean = []
+    for item in lists:
+        if not isinstance(item, dict) or not item.get("id"):
+            changed = True
+            continue
+        if item.get("id") == "principal":
+            clean.append(main)
+            continue
+        prices = read_amounts(item.get("prices")) or dict(DEFAULT_AMOUNTS)
+        name = str(item.get("name") or "Precio").strip()[:40] or "Precio"
+        row = {"id": str(item.get("id")), "name": name, "prices": prices}
+        if item.get("name") != name or item.get("prices") != prices:
+            changed = True
+        clean.append(row)
+    pay["priceLists"] = clean
+    return clean, changed
+
+
+def plan_from(pay):
+    lists, _ = ensure_price_lists(pay) if pay else ([], False)
+    main = next((item for item in lists if item.get("id") == "principal"), None)
+    amounts = (main or {}).get("prices") or DEFAULT_AMOUNTS
+    periods = []
+    for spec in PERIOD_SPECS:
+        periods.append({**spec, "price": int(amounts.get(spec["id"]) or DEFAULT_AMOUNTS[spec["id"]])})
+    return {**PLAN, "periods": periods}
+
+
+def plan_period(period_id, pay=None):
+    for item in plan_from(pay)["periods"]:
+        if item["id"] == period_id:
+            return item
+    return None
+
+
+def list_price(pay, actor, period):
+    lists, _ = ensure_price_lists(pay)
+    chosen = str((actor or {}).get("priceListId") or "principal")
+    item = next((row for row in lists if row.get("id") == chosen), None) or (lists[0] if lists else None)
+    raw = ((item or {}).get("prices") or {}).get((period or {}).get("id"))
+    try:
+        value = int(round(float(raw)))
+    except (TypeError, ValueError):
+        value = 0
+    return value if value > 0 else int((period or {}).get("price") or 0)
+
+
 PLAN = {
     "id": "bloc",
     "name": "Bloc",
@@ -1664,13 +2048,6 @@ PLAN = {
     ],
 }
 MONTH_MS = 30 * 24 * 60 * 60 * 1000
-
-
-def plan_period(period_id):
-    for item in PLAN["periods"]:
-        if item["id"] == period_id:
-            return item
-    return None
 
 
 def wallet_of(pay, user_id):
@@ -1696,7 +2073,7 @@ def access_view(store, pay, user):
     admin = user.get("role") == "admin"
     until = int(user.get("subscriptionUntil") or 0)
     return {
-        "plan": PLAN,
+        "plan": plan_from(pay),
         "balance": wallet_of(pay, user.get("id")),
         "until": until,
         "permanent": user.get("permanent") is True,
@@ -1719,7 +2096,7 @@ def special_price(actor, period):
 
 
 def activate_period(user, pay, period_id, free=False, charged=None):
-    period = plan_period(period_id)
+    period = plan_period(period_id, pay)
     if not period:
         return False, "Ese plazo no existe."
     listed = period["price"]
@@ -1745,6 +2122,8 @@ def partner_key():
 
 def main():
     load_env()
+    load_store()
+    load_payments()
     url = f"http://127.0.0.1:{PORT}"
     try:
         bind = os.environ.get("BLOC_BIND", "0.0.0.0")

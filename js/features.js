@@ -234,6 +234,8 @@
     document.getElementById("tpl-new-name").value = "";
     const math = document.getElementById("tpl-new-math");
     if (math) math.checked = false;
+    const calendar = document.getElementById("tpl-new-calendar");
+    if (calendar) calendar.checked = false;
     const next = Object.values(bloc.state.templates).filter((tpl) => tpl && !tpl.deletedAt && !tpl.purged).length + 1;
     const order = document.getElementById("tpl-new-order");
     if (order) {
@@ -284,6 +286,8 @@
     document.getElementById("tpl-body").value = tpl.body || "";
     const math = document.getElementById("tpl-math");
     if (math) math.checked = tpl.math === true;
+    const calendar = document.getElementById("tpl-calendar");
+    if (calendar) calendar.checked = tpl.calendar === true;
     modal.hidden = false;
     document.getElementById("tpl-label")?.focus();
   }
@@ -822,7 +826,7 @@
       }
       const color = bloc.readColorPair("tpl-new-color", "tpl-new-hex");
       const id = crypto.randomUUID();
-      bloc.state.templates[id] = { label: name, title: name, body: "", color, order: 1, deletedAt: null, math: document.getElementById("tpl-new-math")?.checked === true };
+      bloc.state.templates[id] = { label: name, title: name, body: "", color, order: 1, deletedAt: null, math: document.getElementById("tpl-new-math")?.checked === true, calendar: document.getElementById("tpl-new-calendar")?.checked === true };
       moveTemplate(id, document.getElementById("tpl-new-order").value);
       bloc.state.activeTemplate = id;
       bloc.state.listView = "active";
@@ -846,6 +850,14 @@
       bloc.save();
       bloc.render();
     });
+    document.getElementById("tpl-calendar")?.addEventListener("change", (e) => {
+      const bloc = B();
+      const id = document.getElementById("template-modal")?.dataset.tplId;
+      const tpl = bloc?.state?.templates?.[id];
+      if (!tpl) return;
+      tpl.calendar = e.target.checked;
+      bloc.save();
+    });
     document.getElementById("tpl-save")?.addEventListener("click", () => {
       const modal = document.getElementById("template-modal");
       const id = modal?.dataset.tplId;
@@ -867,6 +879,7 @@
         deletedAt: previous.deletedAt || null,
         purged: Boolean(previous.purged),
         math: document.getElementById("tpl-math")?.checked === true,
+        calendar: document.getElementById("tpl-calendar")?.checked === true,
       };
       bloc.save();
       closeTemplateEditor();

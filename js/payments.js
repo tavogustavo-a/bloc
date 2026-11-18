@@ -111,14 +111,22 @@
     return Boolean(window.BlocNative);
   }
 
-  function accessText() {
-    if (data?.admin) return "";
-    if (data?.permanent) return "Permanente, sin cobro.";
+  function untilDay(ms) {
+    return new Date(ms).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" });
+  }
+
+  function accessView() {
+    if (data?.admin) return null;
+    if (data?.permanent) return { kind: "permanent", title: "Permanente", detail: "Sin cobro" };
     if (Number(data?.until) > Date.now()) {
-      const listed = Number(data?.listed) ? ` · $${Math.round(Number(data.listed)).toLocaleString("es-CO")}` : "";
-      return `Activo hasta ${when(data.until)}${listed}`;
+      const listed = Number(data?.listed) || 0;
+      const period = (data?.plan?.periods || []).find((item) => Number(item.price) === listed);
+      const title = period?.label || "Activa";
+      const price = listed ? money(listed) : "";
+      const detail = [price, `Vence el ${untilDay(data.until)}`].filter(Boolean).join(" · ");
+      return { kind: "active", title, detail };
     }
-    return "Sin suscripción activa.";
+    return { kind: "off", title: "Sin suscripción", detail: "No hay un plan activo" };
   }
 
   function paintAccess() {
@@ -129,12 +137,18 @@
       const el = document.getElementById(id);
       if (el) el.textContent = `Saldo ${money(data?.balance)}`;
     });
+    const view = accessView();
     ["pay-until", "account-until"].forEach((id) => {
       const el = document.getElementById(id);
-      if (el) {
-        el.textContent = accessText();
-        el.hidden = !el.textContent;
+      if (!el) return;
+      if (!view) {
+        el.hidden = true;
+        el.innerHTML = "";
+        return;
       }
+      el.hidden = false;
+      el.className = `sub-status sub-status-${view.kind}`;
+      el.innerHTML = `<small>Suscripción</small><strong>${escapeHtml(view.title)}</strong><span>${escapeHtml(view.detail)}</span>`;
     });
     const copy = document.getElementById("plan-copy");
     if (copy) copy.textContent = data?.plan?.description || "";
@@ -143,28 +157,163 @@
     if (useBalance) useBalance.hidden = inApp() || data?.admin || data?.permanent;
     const form = document.getElementById("pay-form");
     if (form) form.hidden = inApp();
-    if (!periods) return;
+    if (!periods) {
+      paintCoupons();
+      return;
+    }
     const rows = data?.plan?.periods || [];
     periods.innerHTML = rows.map((item) => `
       <button type="button" class="plan-period${chosen === item.id ? " is-on" : ""}" data-period="${escapeHtml(item.id)}" data-price="${item.price}">
         <strong>${escapeHtml(item.label)}</strong>
         <span>${money(item.price)}${item.discount ? ` · ${item.discount}% menos` : ""}</span>
       </button>`).join("") + (inApp() ? "" : `<button type="button" class="plan-period${chosen === "" ? " is-on" : ""}" data-period="" data-price="">Solo recargar saldo</button>`);
-    const coupons = document.getElementById("coupon-list");
-    if (coupons && data?.admin) {
-      coupons.innerHTML = (data.coupons || []).map((item) => `<li><strong>${escapeHtml(item.code)}</strong> · ${money(item.amount)}${item.used ? " · usado" : ""}</li>`).join("") || "<li>No hay cupones.</li>";
+    paintCoupons();
+  }
+
+  let couponQuery = "";
+  let couponPage = 1;
+  let couponSize = 5;
+
+  function paintCoupons() {
+    const list = document.getElementById("coupon-list");
+    const tools = document.getElementById("coupon-tools");
+    const pager = document.getElementById("coupon-pager");
+    const adminBox = document.getElementById("coupon-admin");
+    const admin = Boolean(data?.admin);
+    if (adminBox) adminBox.hidden = !admin;
+    if (tools) tools.hidden = !admin;
+    if (pager) pager.hidden = !admin;
+    if (!list) return;
+    if (!admin) {
+      list.innerHTML = "";
+      return;
     }
+    const query = couponQuery.trim().toLocaleLowerCase("es");
+    const rows = (data.coupons || []).filter((item) => {
+      const blob = `${item.code || ""} ${item.amount || ""} ${money(item.amount)} ${item.uses || ""} ${item.days || ""}`.toLocaleLowerCase("es");
+      return !query || blob.includes(query);
+    });
+    const size = couponSize === 0 ? Math.max(rows.length, 1) : couponSize;
+    const pages = Math.max(1, Math.ceil(rows.length / size) || 1);
+    if (couponPage > pages) couponPage = pages;
+    const slice = rows.slice((couponPage - 1) * size, (couponPage - 1) * size + size);
+    list.innerHTML = slice.map((item) => {
+      const code = escapeHtml(item.code);
+      const on = item.active !== false;
+      const meta = [`${item.usedCount || 0}/${item.uses || 1} usos`];
+      if (item.days) meta.push(`${item.days} días`);
+      if (item.expired) meta.push("vencido");
+      else if (item.used) meta.push("agotado");
+      return `<li class="user-row">
+        <span class="user-name">${code}<small class="user-parent">${money(item.amount)} · ${meta.join(" · ")}</small></span>
+        <button type="button" class="switch${on ? " is-on" : ""}" data-coupon-active="${code}" aria-pressed="${on}" aria-label="${on ? "Desactivar" : "Activar"}"></button>
+        <button type="button" class="user-ico" data-coupon-edit="${code}" data-amount="${escapeHtml(item.amount)}" data-uses="${item.uses || 1}" data-days="${item.days || ""}" aria-label="Editar"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 16.5 15.2 5.3a1.8 1.8 0 0 1 2.5 0l1 1a1.8 1.8 0 0 1 0 2.5L7.5 20H4v-3.5z"/></svg></button>
+        <button type="button" class="user-ico user-ico-delete" data-coupon-delete="${code}" aria-label="Eliminar"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M5 7.4h14"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M9.2 7.2V5.4h5.6v1.8"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M7.4 7.4 8.3 19h7.4l.9-11.6"/></svg></button>
+      </li>`;
+    }).join("") || `<li class="user-empty">${query ? "No hay cupones con esa búsqueda." : "No hay cupones."}</li>`;
+    const label = document.getElementById("coupon-page");
+    if (label) label.textContent = `Página ${couponPage} de ${pages}`;
+    const prev = document.getElementById("coupon-prev");
+    const next = document.getElementById("coupon-next");
+    if (prev) prev.disabled = couponPage <= 1;
+    if (next) next.disabled = couponPage >= pages;
   }
 
   let chosen = "month";
 
   function paint() {
-    const who = document.getElementById("account-who");
-    if (who && data?.username) who.textContent = data.username;
     paintAccess();
     paintMethods();
     paintList();
     paintReview();
+    paintPrices();
+    const plan = document.getElementById("user-edit-plan");
+    if (plan) fillPlanChoices(plan);
+    const price = document.getElementById("user-edit-price");
+    if (price) fillPriceChoices(price, price.value || "principal");
+  }
+
+  const PRICE_BITS = [
+    ["month", "1 mes"],
+    ["quarter", "3 meses"],
+    ["half", "6 meses"],
+    ["year", "1 año"],
+  ];
+
+  function pricePayload(prefix) {
+    return {
+      month: document.getElementById(`${prefix}month`)?.value || "",
+      quarter: document.getElementById(`${prefix}quarter`)?.value || "",
+      half: document.getElementById(`${prefix}half`)?.value || "",
+      year: document.getElementById(`${prefix}year`)?.value || "",
+    };
+  }
+
+  function fillPlanChoices(select) {
+    const rows = data?.plan?.periods || [];
+    if (!select || !rows.length) return;
+    const current = select.value;
+    select.innerHTML = `<option value="">Activar membresía</option>${rows.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)} · ${money(item.price)}</option>`).join("")}`;
+    select.value = [...select.options].some((option) => option.value === current) ? current : "";
+  }
+
+  function fillPriceChoices(select, selected) {
+    if (!select) return;
+    const rows = data?.priceLists?.length ? data.priceLists : [{ id: "principal", name: "Principal" }];
+    const current = selected || select.value || "principal";
+    select.innerHTML = rows.map((row) => `<option value="${escapeHtml(row.id)}">${escapeHtml(row.name || "Precio")}</option>`).join("");
+    select.value = [...select.options].some((option) => option.value === current) ? current : "principal";
+  }
+
+  window.fillPlanChoices = fillPlanChoices;
+  window.fillPriceChoices = fillPriceChoices;
+
+  function paintPrices() {
+    const list = document.getElementById("price-list");
+    if (!list || !data?.admin) return;
+    const rows = data.priceLists || [];
+    list.innerHTML = rows.length ? rows.map((row) => {
+      const bits = PRICE_BITS.map(([key, label]) => `${label} ${money(row.prices?.[key])}`).join(" · ");
+      const remove = row.id === "principal" ? "" : `<button type="button" class="user-ico user-ico-delete" data-price-delete="${escapeHtml(row.id)}" data-price-name="${escapeHtml(row.name || "Precio")}" aria-label="Eliminar"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M5 7.4h14"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M9.2 7.2V5.4h5.6v1.8"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M7.4 7.4 8.3 19h7.4l.9-11.6"/></svg></button>`;
+      return `<li class="user-row price-row" data-price-open="${escapeHtml(row.id)}"><span class="user-name">${escapeHtml(row.name || "Precio")}<span class="price-bits">${bits}</span></span>${remove}</li>`;
+    }).join("") : `<li class="user-empty">Todavía no hay precios.</li>`;
+  }
+
+  function priceNote(id, message, bad) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.hidden = !message;
+    el.textContent = message || "";
+    el.classList.toggle("cal-conflict", Boolean(message && bad));
+  }
+
+  function closePriceEdit() {
+    const modal = document.getElementById("price-edit-modal");
+    if (modal) modal.hidden = true;
+  }
+
+  function openPriceEdit(id) {
+    const row = (data?.priceLists || []).find((item) => item.id === id);
+    if (!row) return;
+    const modal = document.getElementById("price-edit-modal");
+    if (!modal) return;
+    modal.dataset.id = row.id;
+    const name = document.getElementById("price-edit-name");
+    if (name) {
+      name.value = row.id === "principal" ? "Principal" : (row.name || "");
+      name.readOnly = row.id === "principal";
+    }
+    const fields = { month: "price-edit-month", quarter: "price-edit-quarter", half: "price-edit-half", year: "price-edit-year" };
+    Object.entries(fields).forEach(([key, field]) => {
+      const input = document.getElementById(field);
+      if (input) input.value = row.prices?.[key] ?? "";
+    });
+    const lead = document.getElementById("price-edit-note");
+    if (lead) lead.textContent = row.id === "principal" ? "Este es el precio que ve el usuario." : "Precio interno del super. El usuario ve el principal.";
+    const error = document.getElementById("price-edit-error");
+    if (error) error.hidden = true;
+    modal.hidden = false;
+    (row.id === "principal" ? document.getElementById("price-edit-month") : name)?.focus();
   }
 
   async function load() {
@@ -362,23 +511,137 @@
     event.preventDefault();
     const box = document.getElementById("coupon-create-note");
     const say = (text) => { if (box) { box.hidden = !text; box.textContent = text || ""; } };
+    const code = (document.getElementById("coupon-custom")?.value || "").trim();
+    const uses = (document.getElementById("coupon-uses")?.value || "").trim();
+    if (!code) {
+      say("Escribe el código del cupón.");
+      return;
+    }
+    if (!uses) {
+      say("Escribe el número de usos.");
+      return;
+    }
     try {
       const response = await fetch("/api/coupons/create", {
         method: "POST",
         headers: headers(true),
         body: JSON.stringify({
           amount: document.getElementById("coupon-amount")?.value || "",
-          code: document.getElementById("coupon-custom")?.value || "",
+          code,
+          uses,
+          days: document.getElementById("coupon-days")?.value || "",
         }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "No se pudo crear el cupón.");
       document.getElementById("coupon-create")?.reset();
+      couponPage = 1;
       say(`Cupón ${payload.code} por ${money(payload.amount)}.`);
       await load();
     } catch (error) {
       say(error.message);
     }
+  });
+
+  async function postCoupon(path, body) {
+    const response = await fetch(path, { method: "POST", headers: headers(true), body: JSON.stringify(body) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "No se pudo guardar.");
+    await load();
+  }
+
+  document.getElementById("coupon-list")?.addEventListener("click", async (event) => {
+    const toggle = event.target.closest("[data-coupon-active]");
+    const edit = event.target.closest("[data-coupon-edit]");
+    const remove = event.target.closest("[data-coupon-delete]");
+    if (toggle) {
+      const next = toggle.getAttribute("aria-pressed") !== "true";
+      try {
+        await postCoupon("/api/coupons/update", { code: toggle.dataset.couponActive, active: next });
+      } catch (error) {
+        note(error.message, true);
+      }
+      return;
+    }
+    if (edit) {
+      const modal = document.getElementById("coupon-edit-modal");
+      if (modal) {
+        modal.dataset.code = edit.dataset.couponEdit;
+        modal.hidden = false;
+      }
+      const amount = document.getElementById("coupon-edit-amount");
+      const code = document.getElementById("coupon-edit-code");
+      const uses = document.getElementById("coupon-edit-uses");
+      const days = document.getElementById("coupon-edit-days");
+      const error = document.getElementById("coupon-edit-error");
+      if (amount) amount.value = edit.dataset.amount || "";
+      if (code) code.value = edit.dataset.couponEdit || "";
+      if (uses) uses.value = edit.dataset.uses || "";
+      if (days) days.value = edit.dataset.days || "";
+      if (error) error.hidden = true;
+      return;
+    }
+    if (remove && confirm(`¿Eliminar el cupón ${remove.dataset.couponDelete}?`)) {
+      try {
+        await postCoupon("/api/coupons/delete", { code: remove.dataset.couponDelete });
+      } catch (error) {
+        note(error.message, true);
+      }
+    }
+  });
+  function closeCouponEdit() {
+    const modal = document.getElementById("coupon-edit-modal");
+    if (modal) modal.hidden = true;
+  }
+  document.getElementById("coupon-edit-close")?.addEventListener("click", closeCouponEdit);
+  document.getElementById("coupon-edit-modal")?.addEventListener("pointerdown", (event) => {
+    if (event.target.id === "coupon-edit-modal") closeCouponEdit();
+  });
+  document.getElementById("coupon-edit-save")?.addEventListener("click", async () => {
+    const modal = document.getElementById("coupon-edit-modal");
+    const error = document.getElementById("coupon-edit-error");
+    const say = (text) => { if (error) { error.hidden = !text; error.textContent = text || ""; } };
+    try {
+      await postCoupon("/api/coupons/update", {
+        code: modal?.dataset.code || "",
+        nextCode: document.getElementById("coupon-edit-code")?.value || "",
+        amount: document.getElementById("coupon-edit-amount")?.value || "",
+        uses: document.getElementById("coupon-edit-uses")?.value || "",
+        days: document.getElementById("coupon-edit-days")?.value || "",
+      });
+      closeCouponEdit();
+    } catch (err) {
+      say(err.message || "No se pudo guardar el cupón.");
+    }
+  });
+
+  document.getElementById("coupon-search")?.addEventListener("input", (event) => {
+    couponQuery = event.target.value;
+    couponPage = 1;
+    const clear = document.getElementById("coupon-search-clear");
+    if (clear) clear.hidden = !couponQuery;
+    paintCoupons();
+  });
+  document.getElementById("coupon-search-clear")?.addEventListener("click", () => {
+    const field = document.getElementById("coupon-search");
+    if (field) field.value = "";
+    couponQuery = "";
+    couponPage = 1;
+    document.getElementById("coupon-search-clear").hidden = true;
+    paintCoupons();
+  });
+  document.getElementById("coupon-size")?.addEventListener("change", (event) => {
+    couponSize = Number(event.target.value);
+    couponPage = 1;
+    paintCoupons();
+  });
+  document.getElementById("coupon-prev")?.addEventListener("click", () => {
+    couponPage = Math.max(1, couponPage - 1);
+    paintCoupons();
+  });
+  document.getElementById("coupon-next")?.addEventListener("click", () => {
+    couponPage += 1;
+    paintCoupons();
   });
 
   window.onPlayPurchase = async function onPlayPurchase(period, token) {
@@ -397,6 +660,9 @@
 
   window.openBlocPay = function openBlocPay() {
     window.closeBlocAccount?.();
+    document.body.classList.remove("prices-open");
+    const prices = document.getElementById("prices-page");
+    if (prices) prices.hidden = true;
     const page = document.getElementById("pay-page");
     if (page) page.hidden = false;
     document.body.classList.add("account-open", "pay-open");
@@ -412,8 +678,92 @@
     const account = document.getElementById("account-modal");
     if (!account || account.hidden) document.body.classList.remove("account-open");
     const title = document.querySelector("#account-bar h2");
-    if (title) title.textContent = "Cuenta";
+    if (title && !document.body.classList.contains("prices-open")) title.textContent = "Cuenta";
   };
+
+  window.openBlocPrices = function openBlocPrices() {
+    window.closeBlocPay?.();
+    const page = document.getElementById("prices-page");
+    if (page) page.hidden = false;
+    document.body.classList.add("account-open", "prices-open");
+    const title = document.querySelector("#account-bar h2");
+    if (title) title.textContent = "Membresías";
+    priceNote("price-create-note", "");
+    load().catch((error) => priceNote("price-create-note", error.message, true));
+  };
+
+  window.closeBlocPrices = function closeBlocPrices() {
+    document.body.classList.remove("prices-open");
+    const page = document.getElementById("prices-page");
+    if (page) page.hidden = true;
+    closePriceEdit();
+    const title = document.querySelector("#account-bar h2");
+    if (title && !document.body.classList.contains("pay-open")) title.textContent = "Cuenta";
+  };
+
+  document.getElementById("prices-back")?.addEventListener("click", () => window.closeBlocPrices());
+  document.getElementById("price-edit-close")?.addEventListener("click", closePriceEdit);
+  document.getElementById("price-edit-modal")?.addEventListener("click", (event) => {
+    if (event.target.id === "price-edit-modal") closePriceEdit();
+  });
+  document.getElementById("price-list")?.addEventListener("click", async (event) => {
+    const remove = event.target.closest("[data-price-delete]");
+    if (remove) {
+      event.stopPropagation();
+      const name = remove.dataset.priceName || "este precio";
+      if (!confirmTwice(`¿Eliminar el precio ${name}?`, "Segunda confirmación. Los super que lo tengan vuelven al precio principal.")) return;
+      try {
+        await send("/api/prices/delete", { id: remove.dataset.priceDelete });
+        window.refreshBlocUsers?.();
+      } catch (error) {
+        priceNote("price-create-note", error.message, true);
+      }
+      return;
+    }
+    const open = event.target.closest("[data-price-open]");
+    if (open) openPriceEdit(open.dataset.priceOpen);
+  });
+  document.getElementById("price-create")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = document.getElementById("price-name")?.value.trim() || "";
+    const prices = pricePayload("price-");
+    if (!name || Object.values(prices).some((value) => !String(value).trim())) {
+      priceNote("price-create-note", "Escribe el nombre y los cuatro precios.", true);
+      return;
+    }
+    try {
+      await send("/api/prices/save", { name, prices });
+      event.target.reset();
+      priceNote("price-create-note", "");
+      window.refreshBlocUsers?.();
+    } catch (error) {
+      priceNote("price-create-note", error.message, true);
+    }
+  });
+  document.getElementById("price-edit-save")?.addEventListener("click", async () => {
+    const modal = document.getElementById("price-edit-modal");
+    const id = modal?.dataset.id || "";
+    const name = document.getElementById("price-edit-name")?.value.trim() || "";
+    const prices = pricePayload("price-edit-");
+    const error = document.getElementById("price-edit-error");
+    if (!name || Object.values(prices).some((value) => !String(value).trim())) {
+      if (error) {
+        error.hidden = false;
+        error.textContent = "Escribe el nombre y los cuatro precios.";
+      }
+      return;
+    }
+    try {
+      await send("/api/prices/save", { id, name, prices });
+      closePriceEdit();
+      window.refreshBlocUsers?.();
+    } catch (err) {
+      if (error) {
+        error.hidden = false;
+        error.textContent = err.message || "No se pudo guardar.";
+      }
+    }
+  });
 
   window.refreshBlocPlan();
 })();

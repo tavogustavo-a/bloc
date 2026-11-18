@@ -147,7 +147,28 @@ body.no-templates #tpl-size-row { display: none !important; }
 .icon-menu { background: #3e4a5a; }
 .icon-home { background: #2f6a52; }
 .icon-eye { background: #2f8fad; }
-.icon-notify { background: #3e4a5a; }
+.icon-notify { background: #3e4a5a; position: relative; }
+.icon-notify.has-alert::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e15b48;
+  box-shadow: 0 0 0 2px #3e4a5a;
+}
+.user-plan {
+  height: 28px;
+  max-width: 148px;
+  border-radius: 8px;
+  border: 1px solid rgba(26, 24, 20, 0.16);
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+}
 
 .plantilla-tool {
   height: 36px;
@@ -306,13 +327,23 @@ body.no-templates #tpl-size-row { display: none !important; }
   width: auto;
   height: 32px;
   padding: 0 10px;
-  border: 2px solid #1a1814;
+  border: 1px solid #1a1814;
   border-radius: 10px;
-  background: #fff;
-  color: #1a1814;
+  background: #1a1814;
+  color: #fff;
   font-weight: 600;
   justify-content: center;
   white-space: nowrap;
+  box-shadow: none;
+}
+.note-menu.app-menu .menu-coupon button:hover,
+.note-menu.app-menu .menu-coupon button:active,
+body.theme-dark .note-menu.app-menu .menu-coupon button:hover,
+body.theme-dark .note-menu.app-menu .menu-coupon button:active {
+  background: #1a1814;
+  color: #fff;
+  filter: none;
+  transform: none;
   box-shadow: none;
 }
 .app-menu .menu-coupon p { grid-column: 1 / -1; margin: 0; font-size: 13px; text-align: center; }
@@ -1180,9 +1211,63 @@ body.account-open .desk {
   overflow: visible;
 }
 
-body.pay-open #account-modal { display: none !important; }
+body.pay-open #account-modal,
+body.prices-open #account-modal { display: none !important; }
+body.prices-open .spend-rail { display: none; }
 
 .pay-balance { margin: 0 0 10px; font-size: 18px; text-align: center; }
+.sub-status {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  max-width: 320px;
+  margin: 0 auto 12px;
+  padding: 12px 16px 13px;
+  border-radius: 16px;
+  background: #1a1814;
+  color: #fffdf8;
+  text-align: center;
+}
+.sub-status[hidden] { display: none; }
+.sub-status small {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.62;
+}
+.sub-status strong {
+  font-family: Fraunces, serif;
+  font-size: 22px;
+  font-weight: 620;
+  line-height: 1.15;
+}
+.sub-status span { font-size: 13px; opacity: 0.9; }
+.sub-status-permanent {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  align-items: baseline;
+  column-gap: 10px;
+  row-gap: 2px;
+  max-width: none;
+}
+.sub-status-permanent small { grid-column: 1 / -1; }
+.sub-status-permanent strong,
+.sub-status-permanent span { white-space: nowrap; }
+.sub-status-permanent span {
+  font-size: 15px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+.sub-status-off {
+  background: transparent;
+  color: #1a1814;
+  border: 1.5px dashed rgba(26, 24, 20, 0.35);
+}
+body.theme-dark .sub-status-off {
+  color: #f7f3ec;
+  border-color: rgba(247, 243, 236, 0.35);
+}
 .plan-gate { display: grid; place-items: center; padding: 28px 16px 8px; }
 .plan-gate[hidden] { display: none !important; }
 .plan-card, .plan-box { text-align: center; }
@@ -1314,6 +1399,14 @@ body.account-open #account-modal .modal-card {
 
 body.account-open .account-block:has(#account-admin[hidden]) { display: none; }
 
+.master-note { text-align: center; }
+.account-split {
+  height: 0;
+  margin: 16px 0 4px;
+  border: 0;
+  border-top: 1px solid rgba(26, 24, 20, 0.18);
+}
+
 .account-block {
   background: var(--paper);
   border: 2px solid #1a1814;
@@ -1357,19 +1450,31 @@ body.account-open .account-block:has(#account-admin[hidden]) { display: none; }
   animation: busy-spin 0.8s linear infinite;
 }
 @keyframes busy-spin { to { transform: rotate(360deg); } }
-  background: var(--paper);
-  border: 2px solid #1a1814;
-  border-radius: 18px;
-  box-shadow: var(--shadow);
-  padding: 14px 16px 16px;
-  margin-bottom: 14px;
-}
 
 #coupon-create {
   grid-template-columns: 1fr 1fr;
 }
 #coupon-create button,
-#coupon-create p { grid-column: 1 / -1; }
+#coupon-create p,
+#coupon-edit-form p,
+#coupon-edit-form button { grid-column: 1 / -1; }
+#coupon-edit-form { grid-template-columns: 1fr 1fr; }
+
+#coupon-tools { gap: 18px; margin-top: 12px; }
+#coupon-tools select { flex: 0 0 76px; }
+
+#coupon-redeem {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+#coupon-redeem p { grid-column: 1 / -1; margin: 0; }
+#coupon-redeem button {
+  width: auto;
+  height: 36px;
+  padding: 0 18px;
+  white-space: nowrap;
+}
 
 body.account-open #account-in .backup-list {
   max-height: 180px;
@@ -1407,6 +1512,7 @@ body.account-open #account-in .backup-list {
 }
 
 .section-line h3 { margin: 8px 0; }
+.section-line-start { justify-content: flex-start; gap: 10px; }
 
 .user-tools {
   display: flex;
@@ -1771,9 +1877,10 @@ html.locked-out .login-forgot {
   padding: 0 8px;
 }
 #admin-kind { margin-top: 0; }
-#user-edit-role-field,
-#admin-kind-field { margin: 0; font-size: 13px; color: #6d645b; }
+#user-edit-form .edit-type-row { align-items: center; }
+#user-edit-role { margin-top: 0; }
 #user-edit-plan,
+#user-edit-price,
 #user-edit-special input {
   width: 100%;
   height: 46px;
@@ -1783,7 +1890,45 @@ html.locked-out .login-forgot {
   color: #1a1814;
   padding: 0 12px;
 }
-#user-edit-special { display: grid; gap: 8px; }
+#user-edit-form { text-align: center; }
+#user-edit-form input:not([type="checkbox"]),
+#user-edit-form select,
+#user-edit-form button,
+#user-edit-form .edit-type-row,
+#user-edit-form .info-switch { width: 100%; }
+#user-edit-form .info-switch { justify-content: center; }
+#price-create { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#price-create input:first-of-type,
+#price-create button,
+#price-create p { grid-column: 1 / -1; }
+#price-edit-modal .modal-card { width: min(440px, calc(100% - 32px)); }
+#price-edit-form {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+#price-edit-form input,
+#price-edit-form .price-grid,
+#price-edit-form button,
+#price-edit-form p { width: min(100%, 360px); }
+#price-edit-form p,
+#price-edit-form .cal-conflict { text-align: center; margin: 0; }
+.price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.price-grid input,
+#price-edit-name,
+#price-create input {
+  height: 46px;
+  border: 1px solid rgba(26, 24, 20, 0.16);
+  border-radius: 14px;
+  background: #fff;
+  color: #1a1814;
+  padding: 0 12px;
+  text-align: center;
+}
+.price-row { cursor: pointer; }
+#price-edit-name[readonly] { background: #f3efe8; color: #6d6458; }
+.price-bits { color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.35; }
+#prices-page .color-note-title { text-align: center; }
 
 .pass-field input { padding-right: 46px; }
 

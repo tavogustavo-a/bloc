@@ -183,6 +183,7 @@ function normalize(data) {
     tpl.deletedAt = Number(tpl.deletedAt) || null;
     tpl.purged = Boolean(tpl.purged);
     tpl.math = tpl.math === true;
+    tpl.calendar = tpl.calendar === true;
     if (!Number.isFinite(tpl.order)) tpl.order = null;
   });
   const rankedTpl = Object.keys(next.templates).filter((id) => Number.isFinite(next.templates[id].order)).sort((a, b) => next.templates[a].order - next.templates[b].order);
@@ -300,6 +301,7 @@ function ensureOtros() {
     deletedAt: null,
     purged: false,
     math: false,
+    calendar: false,
   };
   return id;
 }
@@ -1145,13 +1147,58 @@ function noticeItem(alarm) {
 function renderNotifyPanel() {
   const upcoming = document.getElementById("notify-upcoming");
   const recent = document.getElementById("notify-recent");
+  const members = document.getElementById("notify-members");
+  const membersLabel = document.getElementById("notify-members-label");
   if (!upcoming || !recent) return;
   const now = Date.now();
   const next = state.alarms.filter((alarm) => alarm.at > now).sort((a, b) => a.at - b.at);
   const past = state.alarms.filter((alarm) => alarm.at <= now).sort((a, b) => b.at - a.at);
   upcoming.innerHTML = next.map(noticeItem).join("") || `<li class="notify-empty">No hay avisos por llegar.</li>`;
   recent.innerHTML = past.map(noticeItem).join("") || `<li class="notify-empty">No hay recientes.</li>`;
+  if (!members || !membersLabel) return;
+  membersLabel.hidden = !membershipNotices.length;
+  members.innerHTML = membershipNotices.map((item) => {
+    const when = new Date(item.until).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" });
+    const line = item.until > now ? `Vence el ${when}` : `Venció el ${when}`;
+    return `<li class="notify-row"><span class="notify-main"><strong>${escapeHtml(item.username || item.email || "Usuario")}</strong><small>${line}</small></span></li>`;
+  }).join("");
 }
+
+let membershipNotices = [];
+
+function pingMemberships() {
+  const soon = membershipNotices.filter((item) => item.until > Date.now());
+  if (!soon.length) return;
+  const day = new Date().toISOString().slice(0, 10);
+  const key = `bloc-vence-dia:${day}`;
+  if (localStorage.getItem(key)) return;
+  localStorage.setItem(key, "1");
+  const body = soon.length === 1
+    ? `${soon[0].username || "Un usuario"} vence el ${new Date(soon[0].until).toLocaleDateString("es", { day: "numeric", month: "long" })}`
+    : `${soon.length} usuarios vencen pronto`;
+  if (window.BlocNative?.startRing) {
+    window.BlocNative.startRing(JSON.stringify({
+      text: body,
+      title: "Membresía por vencer",
+      continuous: false,
+      vibrate: true,
+      kind: "expiry",
+    }));
+    return;
+  }
+  if ("Notification" in window && Notification.permission === "granted") {
+    const notice = new Notification("Bloc — membresía", { body, tag: key });
+    notice.onclick = () => window.focus();
+  }
+}
+
+window.setMembershipNotices = function setMembershipNotices(items) {
+  membershipNotices = Array.isArray(items) ? items : [];
+  const bell = document.getElementById("btn-notify");
+  if (bell) bell.classList.toggle("has-alert", membershipNotices.length > 0);
+  renderNotifyPanel();
+  pingMemberships();
+};
 
 function renderNotify() {
   const panel = document.getElementById("notify-panel");
