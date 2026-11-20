@@ -92,8 +92,11 @@ function blank() {
   return {
     files: [], alarms: [], sound: true, openId: null, listView: "active", lastSnoozeQuick: "10", theme: "light",
     showExport: true, showImport: true, hideTools: false, hideEditor: false, toolSize: 46,
-    toolOrder: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
-    showDetail: false, focusOpen: false, activeTemplate: "compras", accountOpen: false,
+    toolColor: true, toolDelete: true, toolCopy: true, toolRepeat: false, lockEdit: false, appLock: false, appColor: "",
+    toolOrder: ["bold", "italic", "strike", "under", "ink", "mark", "clear", "align", "ol", "ul", "check", "font", "image", "file", "find", "copy"],
+    barTools: { bold: true, italic: true, undo: true, redo: true, strike: true, under: true, ink: true, mark: true, clear: true, align: true, ol: true, ul: true, check: true, font: true, image: true, file: true, find: true, copy: true },
+    autoHideBar: false, colorShortcuts: false, inkShortcuts: ["#c45b52", "#1a1814", "#2f6f4e"],
+    showDetail: false, focusOpen: false, activeTemplate: "compras", accountOpen: false, shortcutsOpen: false,
     templates: structuredClone(DEFAULT_TEMPLATES),
     templateLook: { layout: "titles", size: 22 },
     noteGap: 6,
@@ -135,16 +138,33 @@ function normalize(data) {
   next.showExport = data.showExport !== false;
   next.showImport = data.showImport !== false;
   next.hideTools = data.hideTools === true;
+  next.toolColor = data.toolColor !== false;
+  next.toolDelete = data.toolDelete !== false;
+  next.toolCopy = data.toolCopy !== false;
+  next.toolRepeat = data.toolRepeat === true;
+  next.lockEdit = data.lockEdit === true;
+  next.appLock = data.appLock === true;
+  next.appColor = isHexColor(data.appColor) ? data.appColor.toLowerCase() : "";
+  const barSaved = data.barTools && typeof data.barTools === "object" ? data.barTools : {};
+  next.barTools = {};
+  ["bold", "italic", "undo", "redo", "strike", "under", "ink", "mark", "clear", "align", "ol", "ul", "check", "font", "image", "file", "find", "copy"].forEach((key) => {
+    next.barTools[key] = barSaved[key] !== false;
+  });
+  next.autoHideBar = data.autoHideBar === true;
+  next.colorShortcuts = data.colorShortcuts === true;
+  const inks = Array.isArray(data.inkShortcuts) ? data.inkShortcuts.filter(isHexColor).slice(0, 3) : [];
+  next.inkShortcuts = [inks[0] || "#c45b52", inks[1] || "#1a1814", inks[2] || "#2f6f4e"];
   next.hideEditor = data.hideEditor === true;
   const toolSize = Number(data.toolSize);
   next.toolSize = toolSize >= 36 && toolSize <= 64 ? toolSize : 46;
-  const toolIds = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+  const toolIds = ["bold", "italic", "strike", "under", "ink", "mark", "clear", "align", "ol", "ul", "check", "font", "image", "file", "find", "copy"];
   const toolOrder = Array.isArray(data.toolOrder) ? data.toolOrder.map(String).filter((id) => toolIds.includes(id)) : [];
   next.toolOrder = [...toolOrder, ...toolIds.filter((id) => !toolOrder.includes(id))];
   next.listView = ["active", "archived", "trash"].includes(data.listView) ? data.listView : "active";
   next.showDetail = data.showDetail !== false;
   next.focusOpen = data.focusOpen === true;
   next.accountOpen = data.accountOpen === true;
+  next.shortcutsOpen = data.shortcutsOpen === true;
   next.activeTemplate = data.activeTemplate || null;
   const look = data.templateLook && typeof data.templateLook === "object" ? data.templateLook : {};
   const size = Number(look.size);
@@ -165,14 +185,19 @@ function normalize(data) {
   next.cardSize = card >= 0 && card <= 24 ? card : 0;
   next.askPasswordEvery = data.askPasswordEvery === true;
   next.confirmDelete = data.confirmDelete !== false;
-  if (data.prefDefaults !== 2) {
+  if (data.prefDefaults !== 3) {
+    next.hideTools = false;
+    next.hideEditor = false;
+    next.sound = true;
+    next.confirmDelete = true;
     next.hideNoteAlarms = true;
     next.offlineMode = true;
-    next.prefDefaults = 2;
+    next.showInfo = true;
+    next.prefDefaults = 3;
   } else {
     next.hideNoteAlarms = data.hideNoteAlarms !== false;
     next.offlineMode = data.offlineMode !== false;
-    next.prefDefaults = 2;
+    next.prefDefaults = 3;
   }
   next.showInfo = data.showInfo !== false;
   next.noTemplates = data.noTemplates === true;
@@ -562,12 +587,24 @@ function snapshot() {
     showDetail: state.showDetail !== false,
     focusOpen: state.focusOpen === true,
     accountOpen: state.accountOpen === true,
+    shortcutsOpen: state.shortcutsOpen === true,
     activeTemplate: state.activeTemplate,
     lastSnoozeQuick: state.lastSnoozeQuick,
     theme: state.theme,
     showExport: state.showExport !== false,
     showImport: state.showImport !== false,
     hideTools: state.hideTools === true,
+    toolColor: state.toolColor !== false,
+    toolDelete: state.toolDelete !== false,
+    toolCopy: state.toolCopy !== false,
+    toolRepeat: state.toolRepeat === true,
+    lockEdit: state.lockEdit === true,
+    appLock: state.appLock === true,
+    appColor: state.appColor || "",
+    barTools: state.barTools,
+    autoHideBar: state.autoHideBar === true,
+    colorShortcuts: state.colorShortcuts === true,
+    inkShortcuts: state.inkShortcuts,
     hideEditor: state.hideEditor === true,
     toolSize: state.toolSize,
     toolOrder: state.toolOrder,
@@ -583,7 +620,7 @@ function snapshot() {
     confirmDelete: state.confirmDelete !== false,
     hideNoteAlarms: state.hideNoteAlarms !== false,
     offlineMode: state.offlineMode !== false,
-    prefDefaults: 2,
+    prefDefaults: 3,
     showInfo: state.showInfo !== false,
     noTemplates: state.noTemplates === true,
     alarmUntilTouch: state.alarmUntilTouch === true,
@@ -638,11 +675,23 @@ function applyRemoteState(data) {
   state.showDetail = next.showDetail;
   state.focusOpen = next.focusOpen;
   state.accountOpen = next.accountOpen;
+  state.shortcutsOpen = next.shortcutsOpen === true;
   state.activeTemplate = next.activeTemplate;
   state.theme = next.theme;
   state.showExport = next.showExport !== false;
   state.showImport = next.showImport !== false;
   state.hideTools = next.hideTools === true;
+  state.toolColor = next.toolColor !== false;
+  state.toolDelete = next.toolDelete !== false;
+  state.toolCopy = next.toolCopy !== false;
+  state.toolRepeat = next.toolRepeat === true;
+  state.lockEdit = next.lockEdit === true;
+  state.appLock = next.appLock === true;
+  state.appColor = next.appColor || "";
+  state.barTools = next.barTools;
+  state.autoHideBar = next.autoHideBar === true;
+  state.colorShortcuts = next.colorShortcuts === true;
+  state.inkShortcuts = next.inkShortcuts;
   state.hideEditor = next.hideEditor === true;
   state.toolSize = next.toolSize;
   state.toolOrder = next.toolOrder;
@@ -658,7 +707,7 @@ function applyRemoteState(data) {
   state.confirmDelete = next.confirmDelete;
   state.hideNoteAlarms = next.hideNoteAlarms !== false;
   state.offlineMode = next.offlineMode !== false;
-  state.prefDefaults = 2;
+  state.prefDefaults = 3;
   state.showInfo = next.showInfo;
   state.noTemplates = next.noTemplates === true;
   state.alarmUntilTouch = next.alarmUntilTouch === true;
@@ -756,11 +805,33 @@ function serialize(node) {
     else if (child.nodeName === "BR") html += "<br>";
     else if (child.nodeName === "MARK" && child.dataset.alarm) {
       html += `<mark class="aviso" data-alarm="${escapeHtml(child.dataset.alarm)}">${escapeHtml(child.textContent)}</mark>`;
-    } else if (child.nodeName === "U") {
-      html += `<u>${serialize(child)}</u>`;
+    } else if (child.nodeName === "U") html += `<u>${serialize(child)}</u>`;
+    else if (child.nodeName === "S" || child.nodeName === "STRIKE" || child.nodeName === "DEL") html += `<s>${serialize(child)}</s>`;
+    else if (child.nodeName === "B" || child.nodeName === "STRONG") html += `<b>${serialize(child)}</b>`;
+    else if (child.nodeName === "I" || child.nodeName === "EM") html += `<i>${serialize(child)}</i>`;
+    else if (child.nodeName === "UL" || child.nodeName === "OL") {
+      const tag = child.nodeName.toLowerCase();
+      html += `<${tag}>${serialize(child)}</${tag}>`;
+    } else if (child.nodeName === "LI") html += `<li>${serialize(child)}</li>`;
+    else if (child.nodeName === "IMG") {
+      const src = child.getAttribute("src") || "";
+      if (src.startsWith("data:image/") && src.length < 500000) html += `<img src="${escapeHtml(src)}" alt="">`;
+    } else if (child.nodeName === "SPAN" || child.nodeName === "FONT") {
+      const color = child.style?.color || child.getAttribute("color") || "";
+      const bg = child.style?.backgroundColor || "";
+      const face = child.style?.fontFamily || child.getAttribute("face") || "";
+      let style = "";
+      if (color) style += `color:${color};`;
+      if (bg) style += `background-color:${bg};`;
+      if (face) style += `font-family:${face};`;
+      html += style ? `<span style="${escapeHtml(style)}">${serialize(child)}</span>` : serialize(child);
     } else if (child.nodeName === "DIV" || child.nodeName === "P") {
-      if (html && !html.endsWith("<br>")) html += "<br>";
-      html += serialize(child);
+      const align = child.style?.textAlign || "";
+      const inner = serialize(child);
+      if (html && !html.endsWith("<br>") && !html.endsWith(">")) html += "<br>";
+      html += align && align !== "start" && align !== "left"
+        ? `<div style="text-align:${align}">${inner}</div>`
+        : inner;
     } else html += serialize(child);
   });
   return html;
@@ -926,6 +997,9 @@ function renderEditor() {
   renderFileAlarms(file);
   paintMathTotal(file);
   if (!document.getElementById("selection-pin")) applyFocusSearch();
+  const frozen = state.lockEdit === true;
+  els.title.contentEditable = frozen ? "false" : "true";
+  els.body.contentEditable = frozen ? "false" : "true";
 }
 
 function moneyToken(token) {
@@ -1432,6 +1506,7 @@ function bindColorPair(colorId, hexId) {
 }
 
 function openColorModal(fileId) {
+  if (state.toolColor === false) return;
   const file = state.files.find((item) => item.id === fileId);
   if (!file) return;
   colorFileId = fileId;
@@ -1446,6 +1521,17 @@ function closeColorModal() {
   const modal = document.getElementById("color-modal");
   if (modal) modal.hidden = true;
   colorFileId = null;
+  const heading = document.getElementById("color-heading");
+  if (heading) heading.textContent = "Color de la nota";
+}
+
+function openAppColor() {
+  colorFileId = "app";
+  const heading = document.getElementById("color-heading");
+  if (heading) heading.textContent = "Color de la aplicación";
+  setColorPair("note-color", "note-hex", state.appColor || "#3e4a5a");
+  const modal = document.getElementById("color-modal");
+  if (modal) modal.hidden = false;
 }
 
 function openMenu(id, x, y, opts = {}) {
@@ -1509,6 +1595,8 @@ function openMenu(id, x, y, opts = {}) {
   const moveBtn = els.menu.querySelector("[data-action='move-template']");
   const orderBtn = els.menu.querySelector("[data-action='order']");
   if (orderBtn) orderBtn.hidden = inNote;
+  if (state.toolColor === false && colorBtn) colorBtn.hidden = true;
+  if (state.toolDelete === false && deleteBtn) deleteBtn.hidden = true;
   if (moveBtn) moveBtn.hidden = inNote || state.noTemplates === true || Boolean(file?.deletedAt) || liveTemplateIds().length < 2;
   const underlineBtn = els.menu.querySelector("[data-action='underline']");
   if (underlineBtn) {
@@ -2094,6 +2182,7 @@ els.menu.addEventListener("click", (event) => {
     const ringing = state.alarms.find((alarm) => alarm.id === ringingId);
     if (ringing && ringing.fileId === file.id && file.sound === false) stopChime();
   } else if (action === "delete") {
+    if (state.toolDelete === false) return;
     const name = plain(file.title) || "esta nota";
     const gone = Boolean(file.deletedAt);
     if (!confirmDelete(
@@ -2137,6 +2226,15 @@ document.addEventListener("pointerdown", (event) => {
 
 document.getElementById("color-close")?.addEventListener("click", closeColorModal);
 document.getElementById("note-color-save")?.addEventListener("click", () => {
+  if (colorFileId === "app") {
+    state.appColor = readColorPair("note-color", "note-hex");
+    state.toolColor = true;
+    save();
+    closeColorModal();
+    window.syncBlocChrome?.();
+    return;
+  }
+  if (state.toolColor === false) return;
   const file = state.files.find((item) => item.id === colorFileId);
   if (!file) return;
   file.color = readColorPair("note-color", "note-hex");
@@ -2201,8 +2299,14 @@ function syncHistoryFile() {
 function paintHistoryButtons() {
   const undo = document.getElementById("focus-undo");
   const redo = document.getElementById("focus-redo");
-  if (undo) undo.disabled = historyAt <= 0;
-  if (redo) redo.disabled = historyAt < 0 || historyAt >= history.length - 1;
+  if (undo) {
+    undo.hidden = state.barTools?.undo === false;
+    undo.disabled = historyAt <= 0;
+  }
+  if (redo) {
+    redo.hidden = state.barTools?.redo === false;
+    redo.disabled = historyAt < 0 || historyAt >= history.length - 1;
+  }
 }
 
 function recordHistory() {
@@ -2382,7 +2486,7 @@ els.calConfirm.addEventListener("click", () => {
   const at = chosenMoment();
   const pin = document.getElementById("selection-pin");
   if (!pin && !scheduleTarget) return;
-  const text = (pin ? pin.textContent : scheduleTarget.text).replace(/\s+/g, " ").trim();
+  let text = (pin ? pin.textContent : scheduleTarget?.text || "").replace(/\s+/g, " ").trim();
   if (!at) {
     els.calPreview.textContent = "Elige la hora.";
     return;
@@ -2390,6 +2494,7 @@ els.calConfirm.addEventListener("click", () => {
   const file = scheduleTarget
     ? state.files.find((item) => item.id === scheduleTarget.fileId)
     : currentFile();
+  if (!text && state.toolRepeat === true && file) text = plain(file.body).trim();
   if (!file || !text) return;
   const span = document.getElementById("cal-span")?.value || "one";
   const intervalDays = Number(document.getElementById("cal-interval")?.value) || 7;
@@ -2400,7 +2505,8 @@ els.calConfirm.addEventListener("click", () => {
     els.calPreview.textContent = "Elige al menos un día.";
     return;
   }
-  const repeat = span === "daily" ? "daily" : span === "weekdays" ? "weekdays" : span === "monthly" ? "monthly" : span === "interval" ? "interval" : "none";
+  let repeat = span === "daily" ? "daily" : span === "weekdays" ? "weekdays" : span === "monthly" ? "monthly" : span === "interval" ? "interval" : "none";
+  if (state.toolRepeat !== true) repeat = "none";
   const useDates = repeat === "none" ? dates : dates.slice(0, 1);
   const firstId = crypto.randomUUID();
   const alarms = [];
@@ -2828,6 +2934,7 @@ function playChime() {
 
 const MASTER_KEY = "bloc-master";
 const unlockedNotes = new Set();
+let appUnlocked = true;
 let masterIntent = null;
 let masterMode = "enter";
 
@@ -2916,6 +3023,18 @@ function askMaster(type, id) {
   else showMaster("enter");
 }
 
+function askMasterForAppLock(nextValue) {
+  masterIntent = { type: "app-lock", on: nextValue === true };
+  const has = Boolean(masterStored());
+  showMaster(has ? "enter" : "create");
+  const lead = document.getElementById("master-lead");
+  if (lead) {
+    lead.textContent = has
+      ? "Escribe la contraseña maestra para cambiar esta opción."
+      : "Aún no hay contraseña maestra. Créala una vez. Después abre la aplicación.";
+  }
+}
+
 function askMasterForSetting(nextValue) {
   masterIntent = { type: "setting", askPasswordEvery: nextValue === true };
   const has = Boolean(masterStored());
@@ -2969,6 +3088,12 @@ function finishMaster(id) {
     save();
   } else if (intent.type === "setting") {
     state.askPasswordEvery = intent.askPasswordEvery === true;
+    save();
+  } else if (intent.type === "app-gate") {
+    appUnlocked = true;
+  } else if (intent.type === "app-lock") {
+    state.appLock = intent.on === true;
+    appUnlocked = true;
     save();
   }
   render();
@@ -3030,16 +3155,22 @@ document.getElementById("order-save")?.addEventListener("click", () => {
 });
 
 document.getElementById("master-close")?.addEventListener("click", () => {
+  if (masterIntent?.type === "app-gate") {
+    showMaster("enter");
+    const lead = document.getElementById("master-lead");
+    if (lead) lead.textContent = "Escribe la contraseña para abrir la aplicación.";
+    return;
+  }
   document.getElementById("master-modal").hidden = true;
   masterIntent = null;
   render();
 });
 document.getElementById("master-modal")?.addEventListener("pointerdown", (event) => {
-  if (event.target.id === "master-modal") {
-    document.getElementById("master-modal").hidden = true;
-    masterIntent = null;
-    render();
-  }
+  if (event.target.id !== "master-modal") return;
+  if (masterIntent?.type === "app-gate") return;
+  document.getElementById("master-modal").hidden = true;
+  masterIntent = null;
+  render();
 });
 document.getElementById("master-forgot")?.addEventListener("click", async () => {
   const session = accountSession();
@@ -3175,14 +3306,77 @@ document.addEventListener("bloc-spend", () => {
 });
 document.getElementById("note-hex")?.addEventListener("input", applyNoteColorLive);
 
+const NOTE_FONTS = ["Georgia", "Arial", "Courier New", "Verdana"];
+let noteFontStep = 0;
+
+function noteEditor() {
+  if (state.lockEdit === true) return null;
+  const sel = document.getSelection();
+  const node = sel?.anchorNode;
+  const el = node ? (node.nodeType === 1 ? node : node.parentElement) : null;
+  if (el && (els.body.contains(el) || els.title.contains(el))) return el;
+  if (!currentFile()) return null;
+  els.body.focus();
+  return els.body;
+}
+
+function editCommand(command, value) {
+  if (!noteEditor()) return;
+  document.execCommand(command, false, value ?? null);
+  onEdit();
+}
+
+function cycleAlign() {
+  if (!noteEditor()) return;
+  const node = document.getSelection()?.anchorNode;
+  const el = node ? (node.nodeType === 1 ? node : node.parentElement) : null;
+  const block = el?.closest("div,p");
+  const current = block?.style?.textAlign || "left";
+  const next = current === "center" ? "right" : current === "right" ? "left" : "center";
+  document.execCommand(next === "center" ? "justifyCenter" : next === "right" ? "justifyRight" : "justifyLeft");
+  onEdit();
+}
+
+function cycleFont() {
+  if (!noteEditor()) return;
+  noteFontStep = (noteFontStep + 1) % NOTE_FONTS.length;
+  document.execCommand("fontName", false, NOTE_FONTS[noteFontStep]);
+  onEdit();
+}
+
+function insertNoteFile(file, asImage) {
+  if (!file || state.lockEdit === true || !currentFile()) return;
+  if (asImage || file.type.startsWith("image/")) {
+    if (file.size > 450000) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (!noteEditor()) return;
+      document.execCommand("insertHTML", false, `<img src="${reader.result}" alt="">`);
+      onEdit();
+    };
+    reader.readAsDataURL(file);
+    return;
+  }
+  if (!noteEditor()) return;
+  document.execCommand("insertText", false, ` ${file.name || "archivo"} `);
+  onEdit();
+}
+
 window.Bloc = {
   state, save, render, createFile, selectTemplate, deleteTemplate, confirmTwice, confirmDelete, openScheduleFromList, noteScheduleText, markWholeNote,
   openCalendar, rememberFile, formatLong, plain, pendingAlarms, openFile, closeFocus,
   escapeHtml, DEFAULT_TEMPLATES, CARD_COLORS, noteCardClass, colorHex, isHexColor, setColorPair, readColorPair, bindColorPair, snapshot, applyRemoteState,
-  askMasterForSetting, paintMasterAccount, setNoTemplates, parkLooseNotes,
+  askMasterForSetting, askMasterForAppLock, openAppColor, editCommand, cycleAlign, cycleFont, insertNoteFile, paintMasterAccount, setNoTemplates, parkLooseNotes,
 };
 render();
 restorePlace();
+if (state.appLock && masterStored()) {
+  appUnlocked = false;
+  masterIntent = { type: "app-gate" };
+  showMaster("enter");
+  const lead = document.getElementById("master-lead");
+  if (lead) lead.textContent = "Escribe la contraseña para abrir la aplicación.";
+}
 setInterval(tick, 1000);
 syncNativeAlarms();
 tick();

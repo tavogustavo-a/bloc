@@ -6,7 +6,12 @@
   let tplMenuId = null;
   let tplPress = null;
 
-  const TOOL_IDS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+  const TOOL_IDS = ["bold", "italic", "strike", "under", "ink", "mark", "clear", "align", "ol", "ul", "check", "font", "image", "file", "find", "copy"];
+  const TOOL_NAMES = {
+    bold: "Negrita", italic: "Cursiva", strike: "Texto tachado", under: "Subrayado", ink: "Color del texto",
+    mark: "Color de fondo", clear: "Borrar formato", align: "Alineación", ol: "Lista numerada", ul: "Lista con puntos",
+    check: "Casillas", font: "Tipo de fuente", image: "Insertar imagen", file: "Adjuntar archivo", find: "Buscar texto", copy: "Copiar",
+  };
 
   function orderTools() {
     const bloc = B();
@@ -16,6 +21,10 @@
     [...saved, ...TOOL_IDS.filter((id) => !saved.includes(id))].forEach((id) => {
       const el = scroll.querySelector(`[data-tool="${id}"]`);
       if (el) scroll.appendChild(el);
+    });
+    const ink = scroll.querySelector('[data-tool="ink"]');
+    [...scroll.querySelectorAll("[data-ink]")].reverse().forEach((btn) => {
+      if (ink) ink.after(btn);
     });
   }
 
@@ -28,7 +37,7 @@
     const editor = document.querySelector('[data-menu="editor"]');
     if (editor) editor.hidden = hideEditor;
     [
-      ["shortcut-hide-tools", hideBar],
+      ["shortcut-hide-tools", !hideBar],
       ["shortcut-hide-editor", hideEditor],
     ].forEach(([id, on]) => {
       const box = document.getElementById(id);
@@ -39,6 +48,13 @@
     const size = Number(bloc.state.toolSize);
     const px = size >= 36 && size <= 64 ? size : 46;
     document.documentElement.style.setProperty("--tool-size", `${px}px`);
+    if (bloc.state.toolColor !== false && bloc.state.appColor) {
+      document.documentElement.style.setProperty("--tool-bg", bloc.state.appColor);
+    } else {
+      document.documentElement.style.removeProperty("--tool-bg");
+    }
+    paintEditTools();
+    paintBarTools();
     const field = document.getElementById("tool-size");
     if (field) field.value = String(px);
     orderTools();
@@ -93,7 +109,7 @@
       scroll.dataset.dragged = "1";
       const bloc = B();
       if (!bloc) return;
-      bloc.state.toolOrder = [...scroll.querySelectorAll(".tool-ico")].map((el) => el.dataset.tool);
+      bloc.state.toolOrder = [...scroll.querySelectorAll(".tool-ico")].map((el) => el.dataset.tool).filter(Boolean);
       bloc.save();
     };
     scroll.addEventListener("pointerup", finish);
@@ -112,6 +128,67 @@
       scroll.scrollLeft += event.deltaY || event.deltaX;
       event.preventDefault();
     }, { passive: false });
+  }
+
+  function paintEditTools() {
+    const bloc = B();
+    if (!bloc) return;
+    [
+      ["tool-color", bloc.state.toolColor !== false],
+      ["tool-delete", bloc.state.toolDelete !== false],
+      ["tool-copy", bloc.state.toolCopy !== false],
+      ["tool-repeat", bloc.state.toolRepeat === true],
+      ["tool-lock-edit", bloc.state.lockEdit === true],
+      ["tool-applock", bloc.state.appLock === true],
+    ].forEach(([id, on]) => {
+      const box = document.getElementById(id);
+      if (!box) return;
+      box.classList.toggle("is-on", on);
+      box.setAttribute("aria-pressed", String(on));
+    });
+  }
+
+  function paintBarTools() {
+    const bloc = B();
+    const tools = bloc?.state.barTools || {};
+    document.querySelectorAll("#tool-scroll [data-tool]").forEach((btn) => {
+      btn.hidden = tools[btn.dataset.tool] === false;
+    });
+    const undoBtn = document.getElementById("focus-undo");
+    const redoBtn = document.getElementById("focus-redo");
+    if (undoBtn) undoBtn.hidden = tools.undo === false;
+    if (redoBtn) redoBtn.hidden = tools.redo === false;
+    document.querySelectorAll("#shortcuts-page [data-bar]").forEach((box) => {
+      const on = tools[box.dataset.bar] !== false;
+      box.classList.toggle("is-on", on);
+      box.setAttribute("aria-pressed", String(on));
+    });
+    const auto = document.getElementById("tool-autohide");
+    if (auto) {
+      auto.classList.toggle("is-on", bloc?.state.autoHideBar === true);
+      auto.setAttribute("aria-pressed", String(bloc?.state.autoHideBar === true));
+    }
+    const colors = document.getElementById("tool-color-shortcuts");
+    const picks = document.getElementById("ink-picks");
+    const onColors = bloc?.state.colorShortcuts === true;
+    if (colors) {
+      colors.classList.toggle("is-on", onColors);
+      colors.setAttribute("aria-pressed", String(onColors));
+    }
+    if (picks) picks.hidden = !onColors;
+    const inks = bloc?.state.inkShortcuts || [];
+    document.querySelectorAll("[data-ink]").forEach((btn) => {
+      const hex = inks[Number(btn.dataset.ink)] || "#1a1814";
+      btn.hidden = !onColors;
+      btn.style.background = hex;
+    });
+    ["ink-1", "ink-2", "ink-3"].forEach((id, index) => {
+      const field = document.getElementById(id);
+      if (field && inks[index]) field.value = inks[index];
+    });
+    const size = document.getElementById("bar-size");
+    if (size && document.activeElement !== size) size.value = String(bloc?.state.toolSize || 46);
+    document.getElementById("open-tool-order")?.classList.toggle("is-locked", bloc?.state.hideTools === true);
   }
 
   function applyMenuShortcuts() {
@@ -142,7 +219,9 @@
   }
 
   function closeShortcuts() {
-    document.body.classList.remove("shortcuts-open");
+    document.body.classList.remove("shortcuts-open", "tool-order-open");
+    const order = document.getElementById("tool-order-page");
+    if (order) order.hidden = true;
     const page = document.getElementById("shortcuts-page");
     if (page) page.hidden = true;
     const account = document.getElementById("account-modal");
@@ -152,6 +231,11 @@
     if (!stay) document.body.classList.remove("account-open");
     const title = document.querySelector("#account-bar h2");
     if (title && !stay) title.textContent = "Cuenta";
+    const bloc = B();
+    if (bloc?.state.shortcutsOpen) {
+      bloc.state.shortcutsOpen = false;
+      bloc.save();
+    }
   }
 
   function openShortcuts() {
@@ -165,7 +249,47 @@
     if (title) title.textContent = "Accesos directos";
     applyTheme(B()?.state.theme || "light");
     applyMenuShortcuts();
+    applyToolChrome();
+    applyTemplateLook();
     bindToolDrag();
+    const bloc = B();
+    if (bloc && bloc.state.shortcutsOpen !== true) {
+      bloc.state.shortcutsOpen = true;
+      bloc.state.accountOpen = false;
+      bloc.save();
+    }
+  }
+
+  function paintToolOrder() {
+    const list = document.getElementById("tool-order-list");
+    const bloc = B();
+    if (!list || !bloc) return;
+    const saved = Array.isArray(bloc.state.toolOrder) ? bloc.state.toolOrder.filter((id) => TOOL_IDS.includes(id)) : [];
+    const ids = [...saved, ...TOOL_IDS.filter((id) => !saved.includes(id))];
+    list.innerHTML = ids.map((id) => `<li><span>${TOOL_NAMES[id] || id}</span><button type="button" data-up="${id}" aria-label="Subir">↑</button><button type="button" data-down="${id}" aria-label="Bajar">↓</button></li>`).join("");
+  }
+
+  function openToolOrder() {
+    const bloc = B();
+    if (!bloc || bloc.state.hideTools === true) return;
+    const page = document.getElementById("tool-order-page");
+    const shortcuts = document.getElementById("shortcuts-page");
+    if (shortcuts) shortcuts.hidden = true;
+    if (page) page.hidden = false;
+    document.body.classList.add("tool-order-open");
+    const title = document.querySelector("#account-bar h2");
+    if (title) title.textContent = "Orden de la barra";
+    paintToolOrder();
+  }
+
+  function closeToolOrder() {
+    const page = document.getElementById("tool-order-page");
+    const shortcuts = document.getElementById("shortcuts-page");
+    if (page) page.hidden = true;
+    if (shortcuts) shortcuts.hidden = false;
+    document.body.classList.remove("tool-order-open");
+    const title = document.querySelector("#account-bar h2");
+    if (title) title.textContent = "Accesos directos";
   }
 
   window.closeBlocShortcuts = closeShortcuts;
@@ -287,9 +411,28 @@
     if (!wrap || !more || !all) return;
     const buttons = [...wrap.querySelectorAll("[data-template]")];
     buttons.forEach((button) => { button.hidden = false; });
-    const edge = wrap.getBoundingClientRect().right;
-    const overflow = buttons.filter((button) => button.getBoundingClientRect().right > edge + 1);
-    overflow.forEach((button) => { button.hidden = true; });
+    const bar = wrap.parentElement;
+    const moreWidth = more.offsetWidth || 28;
+    const available = Math.max(0, (bar?.clientWidth || wrap.clientWidth) - moreWidth - 8);
+    const active = buttons.find((button) => button.classList.contains("is-on"));
+    let used = 0;
+    let activeShown = !active;
+    const overflow = [];
+    buttons.forEach((button) => {
+      const width = button.offsetWidth + 6;
+      const reserve = active && !activeShown && button !== active ? active.offsetWidth + 6 : 0;
+      if (used + width + reserve <= available + 6) {
+        used += width;
+        if (button === active) activeShown = true;
+        return;
+      }
+      if (button === active) {
+        activeShown = true;
+        return;
+      }
+      button.hidden = true;
+      overflow.push(button);
+    });
     more.hidden = overflow.length === 0;
     const listed = overflow;
     const search = listed.length > 5 ? `<input id="template-find" name="template-find" type="search" placeholder="Buscar plantilla" autocomplete="off" aria-label="Buscar plantilla">` : "";
@@ -357,8 +500,6 @@
     if (continuous) continuous.checked = bloc.state.alarmContinuous === true;
     const extra = document.getElementById("alarm-continuous-opts");
     if (extra) extra.hidden = bloc.state.alarmContinuous !== true;
-    const fullBox = document.getElementById("open-full");
-    if (fullBox) fullBox.checked = bloc.state.showDetail === false;
     const panelBox = document.getElementById("show-panel");
     if (panelBox) panelBox.checked = bloc.state.showDetail !== false;
     const askBox = document.getElementById("ask-password");
@@ -502,8 +643,9 @@
     readOnlyFocus = on;
     const title = document.getElementById("file-title");
     const body = document.getElementById("body");
-    title.contentEditable = on ? "false" : "true";
-    body.contentEditable = on ? "false" : "true";
+    const frozen = on || B()?.state.lockEdit === true;
+    title.contentEditable = frozen ? "false" : "true";
+    body.contentEditable = frozen ? "false" : "true";
     document.getElementById("focus-readonly")?.setAttribute("aria-pressed", String(on));
     document.body.classList.toggle("focus-readonly", on);
   };
@@ -549,12 +691,184 @@
       bloc.save();
       applyToolChrome();
     });
+    document.getElementById("tool-color")?.addEventListener("click", () => {
+      if (bloc.state.hideTools) return;
+      if (bloc.state.toolColor === false) {
+        bloc.state.toolColor = true;
+        bloc.save();
+        paintEditTools();
+        bloc.openAppColor?.();
+        return;
+      }
+      bloc.state.toolColor = false;
+      bloc.save();
+      applyToolChrome();
+    });
+    document.getElementById("tool-delete")?.addEventListener("click", () => {
+      if (bloc.state.hideTools) return;
+      bloc.state.toolDelete = bloc.state.toolDelete === false;
+      bloc.save();
+      paintEditTools();
+    });
+    document.getElementById("tool-copy")?.addEventListener("click", () => {
+      if (bloc.state.hideTools) return;
+      bloc.state.toolCopy = bloc.state.toolCopy === false;
+      bloc.save();
+      paintEditTools();
+    });
+    document.getElementById("tool-repeat")?.addEventListener("click", async () => {
+      if (bloc.state.hideTools) return;
+      const next = bloc.state.toolRepeat !== true;
+      const ok = await askSure(next
+        ? "El texto que elijas se puede repetir en los días del aviso. ¿Activar repetir texto?"
+        : "Los avisos nuevos quedan en un solo día. ¿Quitar repetir texto?");
+      if (!ok) return;
+      bloc.state.toolRepeat = next;
+      bloc.save();
+      paintEditTools();
+    });
+    document.getElementById("tool-lock-edit")?.addEventListener("click", () => {
+      if (bloc.state.hideTools) return;
+      bloc.state.lockEdit = bloc.state.lockEdit !== true;
+      bloc.save();
+      paintEditTools();
+      bloc.render();
+    });
+    document.getElementById("tool-applock")?.addEventListener("click", () => {
+      if (bloc.state.hideTools) return;
+      bloc.askMasterForAppLock?.(bloc.state.appLock !== true);
+    });
+    document.getElementById("edit-sec")?.addEventListener("click", (e) => {
+      const info = e.target.closest(".info-ico");
+      if (!info) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const heading = document.getElementById("info-heading");
+      const text = document.getElementById("info-text");
+      const modal = document.getElementById("info-modal");
+      if (heading) heading.textContent = info.getAttribute("aria-label") || "Información";
+      if (text) text.textContent = info.dataset.info || "";
+      if (modal) modal.hidden = false;
+    });
+    document.getElementById("shortcuts-page")?.addEventListener("click", (e) => {
+      const box = e.target.closest("[data-bar]");
+      if (!box || (bloc.state.hideTools && box.closest("#bar-sec"))) return;
+      const key = box.dataset.bar;
+      bloc.state.barTools = { ...(bloc.state.barTools || {}) };
+      bloc.state.barTools[key] = bloc.state.barTools[key] === false;
+      bloc.save();
+      paintBarTools();
+    });
+    document.getElementById("tool-ink")?.addEventListener("input", (e) => {
+      bloc.editCommand?.("foreColor", e.target.value);
+    });
+    document.getElementById("tool-mark")?.addEventListener("input", (e) => {
+      bloc.editCommand?.("hiliteColor", e.target.value);
+    });
+    document.getElementById("tool-image")?.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) bloc.insertNoteFile?.(file, true);
+      e.target.value = "";
+    });
+    document.getElementById("tool-file")?.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) bloc.insertNoteFile?.(file, false);
+      e.target.value = "";
+    });
+    document.getElementById("tool-scroll")?.addEventListener("click", async (e) => {
+      if (e.defaultPrevented) return;
+      const swatch = e.target.closest("[data-ink]");
+      if (swatch && bloc.state.lockEdit !== true) {
+        bloc.editCommand?.("foreColor", (bloc.state.inkShortcuts || [])[Number(swatch.dataset.ink)] || "#1a1814");
+        return;
+      }
+      const btn = e.target.closest("[data-tool]");
+      if (!btn || bloc.state.lockEdit === true) return;
+      const tool = btn.dataset.tool;
+      if (tool === "bold") bloc.editCommand?.("bold");
+      else if (tool === "italic") bloc.editCommand?.("italic");
+      else if (tool === "strike") bloc.editCommand?.("strikeThrough");
+      else if (tool === "under") bloc.editCommand?.("underline");
+      else if (tool === "clear") bloc.editCommand?.("removeFormat");
+      else if (tool === "ol") bloc.editCommand?.("insertOrderedList");
+      else if (tool === "ul") bloc.editCommand?.("insertUnorderedList");
+      else if (tool === "check") bloc.editCommand?.("insertText", "☐ ");
+      else if (tool === "align") bloc.cycleAlign?.();
+      else if (tool === "font") bloc.cycleFont?.();
+      else if (tool === "ink") document.getElementById("tool-ink")?.click();
+      else if (tool === "mark") document.getElementById("tool-mark")?.click();
+      else if (tool === "image") document.getElementById("tool-image")?.click();
+      else if (tool === "file") document.getElementById("tool-file")?.click();
+      else if (tool === "find") document.getElementById(document.body.classList.contains("focus-open") ? "focus-search" : "search")?.focus();
+      else if (tool === "copy") {
+        if (bloc.state.toolCopy === false) return;
+        const file = bloc.state.files.find((item) => item.id === bloc.state.openId);
+        if (!file) return;
+        const text = `${bloc.plain(file.title)}\n${bloc.plain(file.body)}`.trim();
+        if (!text) return;
+        try { await navigator.clipboard.writeText(text); } catch { /* sin permiso */ }
+      }
+    });
+    document.getElementById("open-tool-order")?.addEventListener("click", openToolOrder);
+    document.getElementById("tool-order-list")?.addEventListener("click", (e) => {
+      const up = e.target.closest("[data-up]");
+      const down = e.target.closest("[data-down]");
+      const id = up?.dataset.up || down?.dataset.down;
+      if (!id || bloc.state.hideTools) return;
+      const saved = Array.isArray(bloc.state.toolOrder) ? bloc.state.toolOrder.filter((item) => TOOL_IDS.includes(item)) : [];
+      const ids = [...saved, ...TOOL_IDS.filter((item) => !saved.includes(item))];
+      const index = ids.indexOf(id);
+      const next = up ? index - 1 : index + 1;
+      if (index < 0 || next < 0 || next >= ids.length) return;
+      [ids[index], ids[next]] = [ids[next], ids[index]];
+      bloc.state.toolOrder = ids;
+      bloc.save();
+      orderTools();
+      paintToolOrder();
+    });
+    document.getElementById("tool-autohide")?.addEventListener("click", () => {
+      bloc.state.autoHideBar = bloc.state.autoHideBar !== true;
+      bloc.save();
+      paintBarTools();
+      syncAutoBar();
+    });
+    document.getElementById("tool-color-shortcuts")?.addEventListener("click", () => {
+      bloc.state.colorShortcuts = bloc.state.colorShortcuts !== true;
+      bloc.save();
+      paintBarTools();
+    });
+    ["ink-1", "ink-2", "ink-3"].forEach((id, index) => {
+      document.getElementById(id)?.addEventListener("input", (e) => {
+        const colors = [...(bloc.state.inkShortcuts || ["#c45b52", "#1a1814", "#2f6f4e"])];
+        colors[index] = e.target.value;
+        bloc.state.inkShortcuts = colors;
+        bloc.save();
+        paintBarTools();
+      });
+    });
+    document.getElementById("bar-size")?.addEventListener("input", (e) => {
+      bloc.state.toolSize = Number(e.target.value);
+      const other = document.getElementById("tool-size");
+      if (other) other.value = e.target.value;
+      bloc.save();
+      applyToolChrome();
+    });
+    function syncAutoBar() {
+      const typing = bloc.state.autoHideBar === true && bloc.state.hideTools !== true;
+      const field = document.activeElement;
+      const writing = field && (field.id === "file-title" || field.id === "body");
+      const sel = document.getSelection();
+      const selecting = Boolean(sel && !sel.isCollapsed && writing);
+      document.body.classList.toggle("bar-auto-hide", Boolean(typing && writing && !selecting));
+    }
+    document.addEventListener("focusin", syncAutoBar);
+    document.addEventListener("focusout", () => setTimeout(syncAutoBar, 0));
+    document.addEventListener("selectionchange", syncAutoBar);
     document.getElementById("shortcut-hide-editor")?.addEventListener("click", () => {
       bloc.state.hideEditor = bloc.state.hideEditor !== true;
       bloc.save();
       applyToolChrome();
     });
-    document.getElementById("shortcuts-back")?.addEventListener("click", closeShortcuts);
 
     const appMenu = document.getElementById("app-menu");
     document.getElementById("btn-app-menu")?.addEventListener("click", (e) => {
@@ -606,6 +920,10 @@
       if (e.target.id === "info-modal") e.currentTarget.hidden = true;
     });
     function goHome() {
+      if (document.body.classList.contains("tool-order-open")) {
+        closeToolOrder();
+        return;
+      }
       if (document.body.classList.contains("shortcuts-open")) {
         closeShortcuts();
         return;
@@ -907,19 +1225,17 @@
       if (extra) extra.hidden = !next;
       bloc.save();
     });
-    document.getElementById("open-full")?.addEventListener("change", (e) => {
-      bloc.state.showDetail = !e.target.checked;
-      const panel = document.getElementById("show-panel");
-      if (panel) panel.checked = !e.target.checked;
-      if (!e.target.checked && panel) panel.checked = true;
-      bloc.save();
-      bloc.render();
-    });
-    document.getElementById("show-panel")?.addEventListener("change", (e) => {
-      bloc.state.showDetail = e.target.checked;
-      const full = document.getElementById("open-full");
-      if (full) full.checked = !e.target.checked;
-      if (!e.target.checked && full) full.checked = true;
+    document.getElementById("show-panel")?.addEventListener("change", async (e) => {
+      const next = e.target.checked;
+      e.target.checked = !next;
+      const side = bloc.state.showDetail !== false;
+      const text = side
+        ? "Ahora, al tocar una nota, se abre en el panel de al lado. Un doble toque la abre a pantalla completa. ¿Quitar el panel y abrir cada nota a pantalla completa?"
+        : "Ahora, al tocar una nota, se abre a pantalla completa. ¿Volver a abrirla en el panel de al lado? El doble toque sigue abriéndola a pantalla completa.";
+      const ok = await askSure(text);
+      if (!ok) return;
+      e.target.checked = next;
+      bloc.state.showDetail = next;
       bloc.save();
       bloc.render();
     });
@@ -1161,5 +1477,6 @@
     clearInterval(wait);
     bindOnce();
     window.syncBlocChrome();
+    if (window.Bloc.state.shortcutsOpen) openShortcuts();
   }, 30);
 })();

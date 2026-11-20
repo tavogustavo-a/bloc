@@ -248,20 +248,31 @@
     renderAccount();
     const sent = rev();
     const replacing = replaceNext;
+    const sentState = apiBloc.snapshot();
     try {
       const data = await api("/api/sync", {
         method: "POST",
         body: JSON.stringify({
           updatedAt: sent,
           replace: replacing,
-          state: apiBloc.snapshot(),
+          state: sentState,
           backups: backups(),
           masterHash: localStorage.getItem("bloc-master") || "",
         }),
       });
       if (replacing) replaceNext = false;
       quiet = true;
-      if (data.state && !replaceNext) apiBloc.applyRemoteState(data.state);
+      if (data.state && !replaceNext) {
+        if (rev() !== sent) {
+          data.state.activeTemplate = apiBloc.state.activeTemplate;
+          data.state.openId = apiBloc.state.openId;
+          data.state.listView = apiBloc.state.listView;
+          data.state.focusOpen = apiBloc.state.focusOpen;
+          data.state.showDetail = apiBloc.state.showDetail;
+          data.state.shortcutsOpen = apiBloc.state.shortcutsOpen === true;
+        }
+        apiBloc.applyRemoteState(data.state);
+      }
       if (data.updatedAt) setRev(data.updatedAt);
       else if (Array.isArray(data.backups)) writeBackups([...backups(), ...data.backups]);
       quiet = false;
@@ -273,6 +284,7 @@
     } finally {
       pushing = false;
       renderAccount();
+      if (pending && session()) schedulePush();
     }
   }
 
@@ -348,8 +360,9 @@
     const title = document.querySelector("#account-bar h2");
     if (title) title.textContent = "Cuenta";
     const api = bloc();
-    if (api && api.state.accountOpen) {
+    if (api && (api.state.accountOpen || api.state.shortcutsOpen)) {
       api.state.accountOpen = false;
+      api.state.shortcutsOpen = false;
       api.save();
     }
     api?.render();

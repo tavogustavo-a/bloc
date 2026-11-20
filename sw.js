@@ -1,11 +1,11 @@
-const CACHE = "bloc-shell-263";
+const CACHE = "bloc-shell-271";
 const SHELL = [
   "./",
   "./index.html",
-  "./css/styles.css?v=244",
-  "./js/app.js?v=99",
-  "./js/features.js?v=91",
-  "./js/account.js?v=85",
+  "./css/styles.css?v=248",
+  "./js/app.js?v=104",
+  "./js/features.js?v=99",
+  "./js/account.js?v=87",
   "./js/payments.js?v=18",
   "./js/spend.js?v=17",
 ];

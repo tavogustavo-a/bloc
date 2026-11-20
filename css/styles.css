@@ -1181,6 +1181,8 @@ body.account-open .account-bar #account-who {
   text-align: left;
 }
 
+body.shortcuts-open #account-who { display: none; }
+
 #btn-back-home { display: none; }
 body.account-open #btn-back-home { display: grid; }
 body.account-open .search-row,
@@ -2634,13 +2636,51 @@ mark.hit {
   user-select: none;
 }
 .tool-scroll::-webkit-scrollbar { display: none; }
+.edit-sec-title {
+  margin: 18px 0 8px;
+  text-align: center;
+  color: #c45b52;
+  font-size: 16px;
+  font-weight: 700;
+}
+.edit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 4px;
+}
+.edit-ico { color: #c45b52; flex: 0 0 auto; display: grid; }
+.edit-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.edit-copy strong { font-size: 16px; font-weight: 650; }
+.edit-copy small { color: #8a8178; font-size: 13px; line-height: 1.3; }
+.edit-copy .info-ico { margin-left: 6px; vertical-align: middle; }
+body.hide-tools #edit-sec,
+body.hide-tools #bar-sec,
+body.hide-tools #open-tool-order {
+  opacity: 0.45;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+.edit-link { width: 100%; border: 0; background: transparent; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.ink-picks { display: flex; gap: 12px; padding: 0 22px 12px; }
+.ink-picks input { width: 46px; height: 34px; border: 0; background: transparent; padding: 0; }
+#bar-size { width: 148px; accent-color: #8d4b43; }
+.order-list { list-style: none; margin: 0; padding: 0; }
+.order-list li { display: flex; align-items: center; gap: 8px; min-height: 52px; border-bottom: 1px solid #eadfce; }
+.order-list span { flex: 1; font-size: 16px; }
+.order-list button { width: 36px; height: 36px; border-radius: 8px; border: 1px solid #e4d3c4; background: #fff; font-size: 16px; }
+.tool-swatch { box-shadow: inset 0 0 0 2px rgba(255,255,255,.8); }
+body.bar-auto-hide .tool-bar { visibility: hidden; }
+.paper ul, .paper ol { margin: 4px 0 4px 1.2em; }
+.paper li { margin: 2px 0; }
+.paper img { max-width: 100%; height: auto; border-radius: 8px; }
 .tool-ico {
   flex: 0 0 auto;
   width: var(--tool-size, 46px);
   height: var(--tool-size, 46px);
   border: 0;
   border-radius: 14px;
-  background: #3e4a5a;
+  background: var(--tool-bg, #3e4a5a);
   color: #fff;
   display: grid;
   place-items: center;
