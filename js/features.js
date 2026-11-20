@@ -34,6 +34,18 @@
     const hideBar = bloc.state.hideTools === true;
     const hideEditor = bloc.state.hideEditor === true;
     document.body.classList.toggle("hide-tools", hideBar);
+    const showNotify = bloc.state.showNotify !== false;
+    document.body.classList.toggle("hide-notify", !showNotify);
+    if (!showNotify) {
+      const panel = document.getElementById("notify-panel");
+      if (panel) panel.hidden = true;
+      document.getElementById("btn-notify")?.setAttribute("aria-expanded", "false");
+    }
+    const notify = document.getElementById("shortcut-show-notify");
+    if (notify) {
+      notify.classList.toggle("is-on", showNotify);
+      notify.setAttribute("aria-pressed", String(showNotify));
+    }
     const editor = document.querySelector('[data-menu="editor"]');
     if (editor) editor.hidden = hideEditor;
     [
@@ -67,6 +79,7 @@
     let drag = null;
     scroll.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) return;
+      if (event.target.closest(".tool-ico")) event.preventDefault();
       drag = {
         btn: event.target.closest(".tool-ico"),
         x: event.clientX,
@@ -232,8 +245,9 @@
     const title = document.querySelector("#account-bar h2");
     if (title && !stay) title.textContent = "Cuenta";
     const bloc = B();
-    if (bloc?.state.shortcutsOpen) {
+    if (bloc?.state.shortcutsOpen || bloc?.state.toolOrderOpen) {
       bloc.state.shortcutsOpen = false;
+      bloc.state.toolOrderOpen = false;
       bloc.save();
     }
   }
@@ -260,13 +274,17 @@
     }
   }
 
+  function toolIdsNow() {
+    const bloc = B();
+    const saved = Array.isArray(bloc?.state.toolOrder) ? bloc.state.toolOrder.filter((id) => TOOL_IDS.includes(id)) : [];
+    return [...saved, ...TOOL_IDS.filter((id) => !saved.includes(id))];
+  }
+
   function paintToolOrder() {
     const list = document.getElementById("tool-order-list");
-    const bloc = B();
-    if (!list || !bloc) return;
-    const saved = Array.isArray(bloc.state.toolOrder) ? bloc.state.toolOrder.filter((id) => TOOL_IDS.includes(id)) : [];
-    const ids = [...saved, ...TOOL_IDS.filter((id) => !saved.includes(id))];
-    list.innerHTML = ids.map((id) => `<li><span>${TOOL_NAMES[id] || id}</span><button type="button" data-up="${id}" aria-label="Subir">↑</button><button type="button" data-down="${id}" aria-label="Bajar">↓</button></li>`).join("");
+    if (!list || !B()) return;
+    const ids = toolIdsNow();
+    list.innerHTML = ids.map((id, index) => `<li><button type="button" data-pos="${id}" aria-label="Cambiar puesto de ${TOOL_NAMES[id] || id}">${index + 1}</button><span>${TOOL_NAMES[id] || id}</span></li>`).join("");
   }
 
   function openToolOrder() {
@@ -280,6 +298,11 @@
     const title = document.querySelector("#account-bar h2");
     if (title) title.textContent = "Orden de la barra";
     paintToolOrder();
+    if (bloc.state.toolOrderOpen !== true) {
+      bloc.state.toolOrderOpen = true;
+      bloc.state.shortcutsOpen = true;
+      bloc.save();
+    }
   }
 
   function closeToolOrder() {
@@ -290,6 +313,11 @@
     document.body.classList.remove("tool-order-open");
     const title = document.querySelector("#account-bar h2");
     if (title) title.textContent = "Accesos directos";
+    const bloc = B();
+    if (bloc?.state.toolOrderOpen) {
+      bloc.state.toolOrderOpen = false;
+      bloc.save();
+    }
   }
 
   window.closeBlocShortcuts = closeShortcuts;
@@ -806,25 +834,73 @@
         if (!file) return;
         const text = `${bloc.plain(file.title)}\n${bloc.plain(file.body)}`.trim();
         if (!text) return;
-        try { await navigator.clipboard.writeText(text); } catch { /* sin permiso */ }
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          const area = document.createElement("textarea");
+          area.value = text;
+          document.body.appendChild(area);
+          area.select();
+          document.execCommand("copy");
+          area.remove();
+        }
       }
     });
     document.getElementById("open-tool-order")?.addEventListener("click", openToolOrder);
-    document.getElementById("tool-order-list")?.addEventListener("click", (e) => {
-      const up = e.target.closest("[data-up]");
-      const down = e.target.closest("[data-down]");
-      const id = up?.dataset.up || down?.dataset.down;
-      if (!id || bloc.state.hideTools) return;
-      const saved = Array.isArray(bloc.state.toolOrder) ? bloc.state.toolOrder.filter((item) => TOOL_IDS.includes(item)) : [];
-      const ids = [...saved, ...TOOL_IDS.filter((item) => !saved.includes(item))];
-      const index = ids.indexOf(id);
-      const next = up ? index - 1 : index + 1;
-      if (index < 0 || next < 0 || next >= ids.length) return;
-      [ids[index], ids[next]] = [ids[next], ids[index]];
+    let posTool = null;
+    function closePosModal() {
+      const modal = document.getElementById("tool-pos-modal");
+      if (modal) modal.hidden = true;
+      posTool = null;
+    }
+    function savePos() {
+      if (!posTool || bloc.state.hideTools) return closePosModal();
+      const ids = toolIdsNow();
+      const from = ids.indexOf(posTool);
+      if (from < 0) return closePosModal();
+      const field = document.getElementById("tool-pos-input");
+      let to = Math.round(Number(field?.value)) - 1;
+      if (!Number.isFinite(to)) to = from;
+      to = Math.max(0, Math.min(ids.length - 1, to));
+      ids.splice(from, 1);
+      ids.splice(to, 0, posTool);
       bloc.state.toolOrder = ids;
       bloc.save();
       orderTools();
       paintToolOrder();
+      closePosModal();
+    }
+    document.getElementById("tool-order-list")?.addEventListener("click", (e) => {
+      const button = e.target.closest("[data-pos]");
+      if (!button || bloc.state.hideTools) return;
+      const id = button.dataset.pos;
+      const ids = toolIdsNow();
+      const index = ids.indexOf(id);
+      if (index < 0) return;
+      posTool = id;
+      const name = document.getElementById("tool-pos-name");
+      const text = document.getElementById("tool-pos-text");
+      const field = document.getElementById("tool-pos-input");
+      const modal = document.getElementById("tool-pos-modal");
+      if (name) name.textContent = TOOL_NAMES[id] || id;
+      if (text) text.textContent = `${TOOL_NAMES[id] || id} está en el puesto ${index + 1}. El 1 queda primero en la barra y el ${ids.length} al final. Si escribes otro número, las demás opciones se corren para dejarle el lugar.`;
+      if (field) {
+        field.min = "1";
+        field.max = String(ids.length);
+        field.value = String(index + 1);
+      }
+      if (modal) modal.hidden = false;
+      field?.focus();
+      field?.select();
+    });
+    document.getElementById("tool-pos-save")?.addEventListener("click", savePos);
+    document.getElementById("tool-pos-cancel")?.addEventListener("click", closePosModal);
+    document.getElementById("tool-pos-close")?.addEventListener("click", closePosModal);
+    document.getElementById("tool-pos-modal")?.addEventListener("pointerdown", (e) => {
+      if (e.target.id === "tool-pos-modal") closePosModal();
+    });
+    document.getElementById("tool-pos-input")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") savePos();
     });
     document.getElementById("tool-autohide")?.addEventListener("click", () => {
       bloc.state.autoHideBar = bloc.state.autoHideBar !== true;
@@ -864,6 +940,16 @@
     document.addEventListener("focusin", syncAutoBar);
     document.addEventListener("focusout", () => setTimeout(syncAutoBar, 0));
     document.addEventListener("selectionchange", syncAutoBar);
+    document.getElementById("shortcut-show-notify")?.addEventListener("click", async () => {
+      const next = bloc.state.showNotify === false;
+      if (!next) {
+        const ok = await askSure("¿Ocultar el icono de notificaciones? Deja de verse en todas las plantillas.");
+        if (!ok) return;
+      }
+      bloc.state.showNotify = next;
+      bloc.save();
+      applyToolChrome();
+    });
     document.getElementById("shortcut-hide-editor")?.addEventListener("click", () => {
       bloc.state.hideEditor = bloc.state.hideEditor !== true;
       bloc.save();
@@ -928,6 +1014,10 @@
         closeShortcuts();
         return;
       }
+      if (document.body.classList.contains("prices-open")) {
+        window.closeBlocPrices?.();
+        return;
+      }
       const api = B();
       if (api?.state.focusOpen) {
         api.closeFocus();
@@ -956,7 +1046,10 @@
       if (kind === "export") exportCopy();
       if (kind === "import") document.getElementById("import-file")?.click();
       if (kind === "editor") openTemplateLook();
-      if (kind === "account") window.openBlocAccount?.();
+      if (kind === "account") {
+        if (document.body.classList.contains("prices-open")) window.closeBlocPrices?.();
+        else window.openBlocAccount?.();
+      }
       if (kind === "pay") window.openBlocPay?.();
       if (kind === "shortcuts") window.openBlocShortcuts?.();
       if (kind && kind !== "account" && kind !== "pay" && kind !== "shortcuts") {
@@ -1477,6 +1570,9 @@
     clearInterval(wait);
     bindOnce();
     window.syncBlocChrome();
-    if (window.Bloc.state.shortcutsOpen) openShortcuts();
+    const stayOrder = window.Bloc.state.toolOrderOpen === true;
+    if (window.Bloc.state.shortcutsOpen || stayOrder) openShortcuts();
+    if (stayOrder) openToolOrder();
+    if (window.Bloc.state.pricesOpen) window.openBlocPrices?.();
   }, 30);
 })();

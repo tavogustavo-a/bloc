@@ -458,7 +458,140 @@ def merge_states(base, incoming, incoming_newer):
     shell["files"] = merge_by_id(base.get("files"), incoming.get("files"))
     shell["alarms"] = merge_by_id(base.get("alarms"), incoming.get("alarms"))
     shell["templates"] = templates
-    return shell
+    return tidy_state(shell)
+
+
+def tidy_state(state):
+    if not isinstance(state, dict):
+        return state
+    files = [item for item in state.get("files") or [] if isinstance(item, dict) and item.get("id")]
+    ids = {item["id"] for item in files}
+    templates = state.get("templates") if isinstance(state.get("templates"), dict) else {}
+    live = {key for key, tpl in templates.items() if isinstance(tpl, dict) and not tpl.get("purged")}
+    for item in files:
+        if item.get("templateId") and item.get("templateId") not in live:
+            item["templateId"] = None
+            item["loose"] = True
+    state["files"] = files
+    state["alarms"] = [item for item in state.get("alarms") or [] if isinstance(item, dict) and item.get("fileId") in ids]
+    return state
+
+
+def drop_proof(name):
+    name = Path(str(name or "")).name
+    if not re.fullmatch(r"[a-f0-9]{16}\.img", name):
+        return
+    path = PROOFS / name
+    if path.is_file():
+        path.unlink()
+
+
+def descendant_ids(store, root):
+    found = []
+    pending = [root]
+    seen = set()
+    users = store.get("users") or {}
+    while pending:
+        current = pending.pop()
+        if not current or current in seen:
+            continue
+        seen.add(current)
+        found.append(current)
+        for uid, user in users.items():
+            if isinstance(user, dict) and user.get("parentId") == current and uid not in seen:
+                pending.append(uid)
+    return found
+
+
+def sweep_payments(store, pay):
+    live = set((store.get("users") or {}))
+    changed = False
+    kept = []
+    for item in pay.get("requests") or []:
+        if isinstance(item, dict) and item.get("userId") in live:
+            kept.append(item)
+            continue
+        if isinstance(item, dict):
+            drop_proof(item.get("proof"))
+            drop_proof(f"{item.get('id') or ''}.img")
+        changed = True
+    if len(kept) != len(pay.get("requests") or []):
+        pay["requests"] = kept
+        changed = True
+    balances = pay.get("balances") if isinstance(pay.get("balances"), dict) else {}
+    pay["balances"] = balances
+    for key in list(balances):
+        if key not in live:
+            balances.pop(key, None)
+            changed = True
+    for coupon in pay.get("coupons") or []:
+        if isinstance(coupon, dict) and coupon.get("usedBy") and coupon.get("usedBy") not in live:
+            coupon["usedBy"] = ""
+            changed = True
+    referenced = set()
+    for item in pay.get("requests") or []:
+        if not isinstance(item, dict):
+            continue
+        proof = str(item.get("proof") or "")
+        if proof:
+            referenced.add(Path(proof).name)
+        if item.get("id"):
+            referenced.add(f"{item['id']}.img")
+    if PROOFS.exists():
+        for path in PROOFS.iterdir():
+            if path.is_file() and path.suffix == ".img" and path.name not in referenced:
+                path.unlink()
+                changed = True
+    return changed
+
+
+def clear_missing_parents(store):
+    live = set(store.get("users") or {})
+    changed = False
+    for user in (store.get("users") or {}).values():
+        parent = user.get("parentId") if isinstance(user, dict) else ""
+        if parent and parent not in live:
+            user.pop("parentId", None)
+            changed = True
+    return changed
+
+
+def next_price_id(lists, pid):
+    ids = [str(row.get("id") or "") for row in lists if isinstance(row, dict)]
+    if pid not in ids:
+        return "principal"
+    for item in ids[ids.index(pid) + 1:]:
+        if item and item != pid:
+            return item
+    return "principal"
+
+
+def assign_price_users(store, list_id, wanted):
+    chosen = {str(item) for item in wanted}
+    target = "principal" if list_id == "principal" else list_id
+    for person in (store.get("users") or {}).values():
+        if not isinstance(person, dict) or person.get("role") == "admin":
+            continue
+        current = person.get("priceListId") or "principal"
+        if person.get("id") in chosen:
+            person["priceListId"] = target
+        elif current == list_id and list_id != "principal":
+            person["priceListId"] = "principal"
+
+
+def forget_users(store, pay, root_id):
+    ids = [uid for uid in descendant_ids(store, root_id) if (store.get("users") or {}).get(uid, {}).get("role") != "admin"]
+    for uid in ids:
+        store["users"].pop(uid, None)
+    clear_missing_parents(store)
+    sweep_payments(store, pay)
+    return ids
+
+
+def purge_dangling(store, pay):
+    users_changed = clear_missing_parents(store)
+    pay_changed = sweep_payments(store, pay)
+    return users_changed or pay_changed
 
 
 def public_user(user, token=None):
@@ -599,9 +732,11 @@ def erase_later(user_id):
         time.sleep(0.3)
         with LOCK:
             store = load_store()
-            store["users"].pop(user_id, None)
+            pay = load_payments()
+            forget_users(store, pay, user_id)
             write_store(store)
-        print(f"Cuenta {user_id} eliminada con sus notas, copias y sesiones.")
+            write_payments(pay)
+        print("Cuenta eliminada con notas, copias, pagos y pantallazos.")
 
     threading.Thread(target=work, daemon=True).start()
 
@@ -996,8 +1131,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             user_id = user["id"]
             email = user.get("email") or ""
-            store["users"].pop(user_id, None)
+            pay = load_payments()
+            forget_users(store, pay, user_id)
             write_store(store)
+            write_payments(pay)
         if email:
             send_mail(
                 email,
@@ -1351,8 +1488,6 @@ class Handler(SimpleHTTPRequestHandler):
                     self.send_json(400, {"error": "Ese precio no existe."})
                     return
                 target["priceListId"] = chosen
-            elif target.get("role") != "super":
-                target.pop("priceListId", None)
             added = data.get("balanceAdd")
             if added not in (None, ""):
                 delta = parse_amount(added)
@@ -1481,6 +1616,16 @@ class Handler(SimpleHTTPRequestHandler):
                 {"id": row.get("id"), "name": row.get("name") or "Precio", "prices": row.get("prices") or {}}
                 for row in ensure_price_lists(pay)[0]
             ] if admin else [],
+            "pricePeople": [
+                {
+                    "id": person.get("id"),
+                    "username": person.get("username") or person.get("email") or "Usuario",
+                    "role": person.get("role") or "user",
+                    "priceListId": person.get("priceListId") or "principal",
+                }
+                for person in store.get("users", {}).values()
+                if isinstance(person, dict) and person.get("role") != "admin"
+            ] if admin else [],
         }
 
     def payments_get(self):
@@ -1492,7 +1637,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             pay = load_payments()
             _, changed = ensure_price_lists(pay)
+            if purge_dangling(store, pay):
+                changed = True
             if changed:
+                write_store(store)
                 write_payments(pay)
             admin = user.get("role") == "admin"
             self.send_json(200, self.payments_view(store, pay, user, admin))
@@ -1875,7 +2023,11 @@ class Handler(SimpleHTTPRequestHandler):
                     self.send_json(409, {"error": "Ya hay un precio con ese nombre."})
                     return
                 lists.append({"id": secrets.token_hex(4), "name": name, "prices": amounts})
+                pid = lists[-1]["id"]
             pay["priceLists"] = lists
+            if isinstance(data.get("userIds"), list):
+                assign_price_users(store, pid or "principal", data.get("userIds"))
+                write_store(store)
             write_payments(pay)
             self.send_json(200, self.payments_view(store, pay, self.user_by_token(store), True))
 
@@ -1899,9 +2051,10 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_json(404, {"error": "Ese precio no existe."})
                 return
             pay["priceLists"] = [row for row in lists if row.get("id") != pid]
+            landing = next_price_id(lists, pid)
             for person in store["users"].values():
-                if person.get("priceListId") == pid:
-                    person["priceListId"] = "principal"
+                if isinstance(person, dict) and person.get("priceListId") == pid:
+                    person["priceListId"] = landing
             write_payments(pay)
             write_store(store)
             self.send_json(200, self.payments_view(store, pay, self.user_by_token(store), True))

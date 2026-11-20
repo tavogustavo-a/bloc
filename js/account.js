@@ -270,6 +270,8 @@
           data.state.focusOpen = apiBloc.state.focusOpen;
           data.state.showDetail = apiBloc.state.showDetail;
           data.state.shortcutsOpen = apiBloc.state.shortcutsOpen === true;
+          data.state.toolOrderOpen = apiBloc.state.toolOrderOpen === true;
+          data.state.pricesOpen = apiBloc.state.pricesOpen === true;
         }
         apiBloc.applyRemoteState(data.state);
       }
@@ -348,21 +350,25 @@
 
   function closeAccount() {
     if (!session()) return;
-    document.body.classList.remove("account-open", "prices-open", "shortcuts-open");
+    document.body.classList.remove("account-open", "prices-open", "shortcuts-open", "tool-order-open");
     const modal = document.getElementById("account-modal");
     if (modal) modal.hidden = true;
     const prices = document.getElementById("prices-page");
     if (prices) prices.hidden = true;
     const shortcuts = document.getElementById("shortcuts-page");
     if (shortcuts) shortcuts.hidden = true;
+    const order = document.getElementById("tool-order-page");
+    if (order) order.hidden = true;
     const priceEdit = document.getElementById("price-edit-modal");
     if (priceEdit) priceEdit.hidden = true;
     const title = document.querySelector("#account-bar h2");
     if (title) title.textContent = "Cuenta";
     const api = bloc();
-    if (api && (api.state.accountOpen || api.state.shortcutsOpen)) {
+    if (api && (api.state.accountOpen || api.state.shortcutsOpen || api.state.toolOrderOpen || api.state.pricesOpen)) {
       api.state.accountOpen = false;
       api.state.shortcutsOpen = false;
+      api.state.toolOrderOpen = false;
+      api.state.pricesOpen = false;
       api.save();
     }
     api?.render();

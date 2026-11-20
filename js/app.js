@@ -95,8 +95,8 @@ function blank() {
     toolColor: true, toolDelete: true, toolCopy: true, toolRepeat: false, lockEdit: false, appLock: false, appColor: "",
     toolOrder: ["bold", "italic", "strike", "under", "ink", "mark", "clear", "align", "ol", "ul", "check", "font", "image", "file", "find", "copy"],
     barTools: { bold: true, italic: true, undo: true, redo: true, strike: true, under: true, ink: true, mark: true, clear: true, align: true, ol: true, ul: true, check: true, font: true, image: true, file: true, find: true, copy: true },
-    autoHideBar: false, colorShortcuts: false, inkShortcuts: ["#c45b52", "#1a1814", "#2f6f4e"],
-    showDetail: false, focusOpen: false, activeTemplate: "compras", accountOpen: false, shortcutsOpen: false,
+    autoHideBar: false, colorShortcuts: false, inkShortcuts: ["#c45b52", "#1a1814", "#2f6f4e"], showNotify: true,
+    showDetail: false, focusOpen: false, activeTemplate: "compras", accountOpen: false, shortcutsOpen: false, toolOrderOpen: false, pricesOpen: false,
     templates: structuredClone(DEFAULT_TEMPLATES),
     templateLook: { layout: "titles", size: 22 },
     noteGap: 6,
@@ -151,6 +151,7 @@ function normalize(data) {
     next.barTools[key] = barSaved[key] !== false;
   });
   next.autoHideBar = data.autoHideBar === true;
+  next.showNotify = data.showNotify !== false;
   next.colorShortcuts = data.colorShortcuts === true;
   const inks = Array.isArray(data.inkShortcuts) ? data.inkShortcuts.filter(isHexColor).slice(0, 3) : [];
   next.inkShortcuts = [inks[0] || "#c45b52", inks[1] || "#1a1814", inks[2] || "#2f6f4e"];
@@ -165,6 +166,8 @@ function normalize(data) {
   next.focusOpen = data.focusOpen === true;
   next.accountOpen = data.accountOpen === true;
   next.shortcutsOpen = data.shortcutsOpen === true;
+  next.toolOrderOpen = data.toolOrderOpen === true;
+  next.pricesOpen = data.pricesOpen === true;
   next.activeTemplate = data.activeTemplate || null;
   const look = data.templateLook && typeof data.templateLook === "object" ? data.templateLook : {};
   const size = Number(look.size);
@@ -588,6 +591,8 @@ function snapshot() {
     focusOpen: state.focusOpen === true,
     accountOpen: state.accountOpen === true,
     shortcutsOpen: state.shortcutsOpen === true,
+    toolOrderOpen: state.toolOrderOpen === true,
+    pricesOpen: state.pricesOpen === true,
     activeTemplate: state.activeTemplate,
     lastSnoozeQuick: state.lastSnoozeQuick,
     theme: state.theme,
@@ -603,6 +608,7 @@ function snapshot() {
     appColor: state.appColor || "",
     barTools: state.barTools,
     autoHideBar: state.autoHideBar === true,
+    showNotify: state.showNotify !== false,
     colorShortcuts: state.colorShortcuts === true,
     inkShortcuts: state.inkShortcuts,
     hideEditor: state.hideEditor === true,
@@ -676,6 +682,8 @@ function applyRemoteState(data) {
   state.focusOpen = next.focusOpen;
   state.accountOpen = next.accountOpen;
   state.shortcutsOpen = next.shortcutsOpen === true;
+  state.toolOrderOpen = next.toolOrderOpen === true;
+  state.pricesOpen = next.pricesOpen === true;
   state.activeTemplate = next.activeTemplate;
   state.theme = next.theme;
   state.showExport = next.showExport !== false;
@@ -690,6 +698,7 @@ function applyRemoteState(data) {
   state.appColor = next.appColor || "";
   state.barTools = next.barTools;
   state.autoHideBar = next.autoHideBar === true;
+  state.showNotify = next.showNotify !== false;
   state.colorShortcuts = next.colorShortcuts === true;
   state.inkShortcuts = next.inkShortcuts;
   state.hideEditor = next.hideEditor === true;
@@ -3320,13 +3329,41 @@ function noteEditor() {
   return els.body;
 }
 
+let toolRange = null;
+
+function rememberToolRange() {
+  const sel = document.getSelection();
+  if (!sel?.rangeCount || !els?.body) return;
+  const node = sel.anchorNode;
+  const el = node ? (node.nodeType === 1 ? node : node.parentElement) : null;
+  if (!el || (!els.body.contains(el) && !els.title?.contains(el))) return;
+  toolRange = sel.getRangeAt(0).cloneRange();
+}
+
+function restoreToolRange() {
+  if (!toolRange || !els?.body) return;
+  const start = toolRange.startContainer;
+  if (!els.body.contains(start) && !els.title?.contains(start)) return;
+  const sel = document.getSelection();
+  const node = sel?.anchorNode;
+  const el = node ? (node.nodeType === 1 ? node : node.parentElement) : null;
+  if (el && (els.body.contains(el) || els.title.contains(el))) return;
+  sel.removeAllRanges();
+  sel.addRange(toolRange);
+}
+
+document.addEventListener("selectionchange", rememberToolRange);
+
 function editCommand(command, value) {
+  restoreToolRange();
   if (!noteEditor()) return;
   document.execCommand(command, false, value ?? null);
   onEdit();
+  rememberToolRange();
 }
 
 function cycleAlign() {
+  restoreToolRange();
   if (!noteEditor()) return;
   const node = document.getSelection()?.anchorNode;
   const el = node ? (node.nodeType === 1 ? node : node.parentElement) : null;
@@ -3338,6 +3375,7 @@ function cycleAlign() {
 }
 
 function cycleFont() {
+  restoreToolRange();
   if (!noteEditor()) return;
   noteFontStep = (noteFontStep + 1) % NOTE_FONTS.length;
   document.execCommand("fontName", false, NOTE_FONTS[noteFontStep]);
@@ -3346,6 +3384,7 @@ function cycleFont() {
 
 function insertNoteFile(file, asImage) {
   if (!file || state.lockEdit === true || !currentFile()) return;
+  restoreToolRange();
   if (asImage || file.type.startsWith("image/")) {
     if (file.size > 450000) return;
     const reader = new FileReader();

@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,620&family=Outfit:wght@380;500;640&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=248">
+  <link rel="stylesheet" href="css/styles.css?v=260">
   <script>
     try { if (!localStorage.getItem("bloc-cuenta")) document.documentElement.classList.add("locked-out"); } catch (e) {}
   </script>
@@ -337,7 +337,7 @@
       <span id="eye-label">Ocultar panel</span>
       <span class="info-ico" data-info="Muestra u oculta el panel de la nota. Al entrar viene oculto." role="button" tabindex="0" aria-label="Qué hace el panel"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></span>
     </button>
-    <button type="button" data-menu="editor" aria-label="Editor">
+    <button type="button" data-menu="editor" aria-label="Editar tamaños">
       <span class="menu-ico icon-editor">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M4.5 8h9M4.5 16h8"/>
@@ -345,8 +345,8 @@
           <circle cx="15" cy="16" r="2.1" fill="none" stroke="#fff" stroke-width="1.7"/>
         </svg>
       </span>
-      <span>Editor</span>
-      <span class="info-ico" data-info="Ajusta la separación de las notas y un solo tamaño para todas las plantillas." role="button" tabindex="0" aria-label="Qué hace Editor"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></span>
+      <span>Editar tamaños</span>
+      <span class="info-ico" data-info="Ajusta la separación de las notas y un solo tamaño para todas las plantillas." role="button" tabindex="0" aria-label="Qué hace Editar tamaños"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11 10.2h2V17h-2zM11 7h2v2.1h-2z"/></svg></span>
     </button>
     <button type="button" data-menu="export">
       <span class="menu-ico icon-export">
@@ -515,6 +515,24 @@
     </div>
   </div>
 
+  <div id="tool-pos-modal" class="modal" hidden>
+    <div class="modal-card paper-card info-card" role="dialog" aria-modal="true" aria-labelledby="tool-pos-heading">
+      <div class="modal-head look-head">
+        <h2 id="tool-pos-heading">Escribe el número de cada opción</h2>
+        <button type="button" id="tool-pos-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <p id="tool-pos-text" class="info-text">El 1 queda primero en la barra. Si eliges otro número, las demás opciones se corren para dejarle el lugar.</p>
+      <label class="tool-pos-field">
+        <span id="tool-pos-name">Opción</span>
+        <input id="tool-pos-input" type="number" min="1" step="1" inputmode="numeric" aria-label="Nuevo puesto">
+      </label>
+      <div class="modal-actions">
+        <button type="button" id="tool-pos-cancel" class="ghost">Cancelar</button>
+        <button type="button" id="tool-pos-save" class="solid">Guardar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="sure-modal" class="modal" hidden>
     <div class="modal-card paper-card info-card" role="dialog" aria-modal="true" aria-labelledby="sure-heading">
       <div class="modal-head look-head">
@@ -542,7 +560,7 @@
   <div id="tpl-look-modal" class="modal" hidden>
     <div class="modal-card paper-card" role="dialog" aria-modal="true" aria-labelledby="tpl-look-heading">
       <div class="modal-head look-head">
-        <h2 id="tpl-look-heading">Editor</h2>
+        <h2 id="tpl-look-heading">Editar tamaños</h2>
         <button type="button" id="tpl-look-close" class="icon-btn" aria-label="Cerrar">✕</button>
       </div>
       <div class="look-row">
@@ -1051,6 +1069,7 @@
           <div id="account-admin" hidden>
             <div class="section-line section-line-start">
               <h3>Usuarios</h3>
+              <span class="section-dash" aria-hidden="true">-</span>
               <button type="button" id="open-prices" class="ghost tiny" hidden>Membresías</button>
             </div>
           <div class="user-tools">
@@ -1208,7 +1227,7 @@
 
   <section id="tool-order-page" class="account-page" hidden>
     <div class="account-block">
-      <p class="color-note-title">Sube o baja cada opción. La barra tiene que estar visible.</p>
+      <p class="color-note-title">Toca un número para cambiar su puesto.</p>
       <ul id="tool-order-list" class="order-list"></ul>
     </div>
   </section>
@@ -1217,7 +1236,7 @@
     <div class="account-block">
       <button type="button" id="open-tool-order" class="edit-row edit-link">
         <span class="edit-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26"><path d="M8 7h11M8 12h11M8 17h11M5 7h.01M5 12h.01M5 17h.01" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
-        <span class="edit-copy"><strong>Orden de la barra de herramientas</strong><small>Elige el orden de las opciones de formato</small></span>
+        <span class="edit-copy"><strong>Orden de la barra de herramientas</strong></span>
       </button>
       <div class="edit-row">
         <span class="edit-copy"><strong>Mostrar la barra de formato</strong><small>Cuando está desactivada, la barra de formato no aparece nunca mientras editas</small></span>
@@ -1242,6 +1261,11 @@
       </div>
       <div class="edit-row"><span class="edit-copy"><strong>Deshacer acción</strong></span><button type="button" class="switch is-on" data-bar="undo" aria-pressed="true" aria-label="Deshacer acción"></button></div>
       <div class="edit-row"><span class="edit-copy"><strong>Rehacer acción</strong></span><button type="button" class="switch is-on" data-bar="redo" aria-pressed="true" aria-label="Rehacer acción"></button></div>
+      <div class="edit-row">
+        <span class="edit-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M12 3.6a1 1 0 0 1 1 .9v.6a5.2 5.2 0 0 1 4.2 5.1v2.8l1.2 1.8H5.6l1.2-1.8V10.2A5.2 5.2 0 0 1 11 5.1v-.6a1 1 0 0 1 1-.9z"/><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M9.7 18.2a2.3 2.3 0 0 0 4.6 0"/></svg></span>
+        <span class="edit-copy"><strong>Mostrar icono de notificaciones</strong><small>Se ve en todas las plantillas</small></span>
+        <button type="button" id="shortcut-show-notify" class="switch is-on" aria-pressed="true" aria-label="Mostrar icono de notificaciones"></button>
+      </div>
       <div class="shortcut-row">
         <span>Tema oscuro</span>
         <button type="button" id="theme-dark" class="switch" aria-pressed="false" aria-label="Tema oscuro"></button>
@@ -1365,18 +1389,27 @@
 
   <section id="prices-page" class="account-page" hidden>
     <div class="account-block">
-      <div class="section-line section-line-end">
-        <button type="button" id="prices-back" class="ghost tiny">Volver</button>
-      </div>
       <p class="color-note-title">El principal es el precio que ve el usuario. Los demás quedan para los super.</p>
+      <div id="price-tools" class="user-tools" hidden>
+        <label class="search-wrap">
+          <span class="sr">Buscar precio</span>
+          <input id="price-search" name="price-search" type="search" placeholder="Buscar precio" autocomplete="off">
+          <button type="button" id="price-search-clear" class="search-clear" hidden aria-label="Borrar búsqueda">✕</button>
+        </label>
+      </div>
       <ul id="price-list" class="user-rows"></ul>
-      <h3>Crear precio</h3>
+      <div id="price-pager" class="user-pager" hidden>
+        <button type="button" id="price-prev" class="solid">Anterior</button>
+        <span id="price-page">Página 1 de 1</span>
+        <button type="button" id="price-next" class="solid">Siguiente</button>
+      </div>
       <form id="price-create" name="price-create" class="login-field-stack">
         <input id="price-name" name="price-name" type="text" autocomplete="off" placeholder="Nombre del precio" aria-label="Nombre del precio">
         <input id="price-month" name="price-month" type="text" inputmode="decimal" autocomplete="off" placeholder="1 mes" aria-label="Precio 1 mes">
-        <input id="price-quarter" name="price-quarter" type="text" inputmode="decimal" autocomplete="off" placeholder="3 meses" aria-label="Precio 3 meses">
-        <input id="price-half" name="price-half" type="text" inputmode="decimal" autocomplete="off" placeholder="6 meses" aria-label="Precio 6 meses">
-        <input id="price-year" name="price-year" type="text" inputmode="decimal" autocomplete="off" placeholder="1 año" aria-label="Precio 1 año">
+        <input id="price-quarter" name="price-quarter" type="text" readonly tabindex="-1" placeholder="3 meses · 10%" aria-label="Precio 3 meses con 10%">
+        <input id="price-half" name="price-half" type="text" readonly tabindex="-1" placeholder="6 meses · 20%" aria-label="Precio 6 meses con 20%">
+        <input id="price-year" name="price-year" type="text" readonly tabindex="-1" placeholder="1 año · 30%" aria-label="Precio 1 año con 30%">
+        <p class="price-auto-note">3 meses, 6 meses y 1 año se calculan solos: 10%, 20% y 30%.</p>
         <button type="submit" class="solid">Crear precio</button>
         <p id="price-create-note" class="color-note-title" hidden></p>
       </form>
@@ -1393,14 +1426,42 @@
         <input id="price-edit-name" type="text" autocomplete="off" placeholder="Nombre" aria-label="Nombre del precio" name="price-edit-name">
         <div class="price-grid">
           <input id="price-edit-month" type="text" inputmode="decimal" autocomplete="off" placeholder="1 mes" aria-label="Precio 1 mes" name="price-edit-month">
-          <input id="price-edit-quarter" type="text" inputmode="decimal" autocomplete="off" placeholder="3 meses" aria-label="Precio 3 meses" name="price-edit-quarter">
-          <input id="price-edit-half" type="text" inputmode="decimal" autocomplete="off" placeholder="6 meses" aria-label="Precio 6 meses" name="price-edit-half">
-          <input id="price-edit-year" type="text" inputmode="decimal" autocomplete="off" placeholder="1 año" aria-label="Precio 1 año" name="price-edit-year">
+          <input id="price-edit-quarter" type="text" readonly tabindex="-1" placeholder="3 meses · 10%" aria-label="Precio 3 meses con 10%" name="price-edit-quarter">
+          <input id="price-edit-half" type="text" readonly tabindex="-1" placeholder="6 meses · 20%" aria-label="Precio 6 meses con 20%" name="price-edit-half">
+          <input id="price-edit-year" type="text" readonly tabindex="-1" placeholder="1 año · 30%" aria-label="Precio 1 año con 30%" name="price-edit-year">
         </div>
         <p id="price-edit-note" class="color-note-title">El usuario ve el precio principal.</p>
+        <button type="button" id="price-edit-users" class="solid">Usuarios</button>
         <p id="price-edit-error" class="cal-conflict" hidden></p>
         <button type="button" id="price-edit-save" class="solid">Guardar</button>
       </form>
+    </div>
+  </div>
+
+  <div id="price-users-modal" class="modal" hidden>
+    <div class="modal-card paper-card info-card" role="dialog" aria-modal="true" aria-labelledby="price-users-heading">
+      <div class="modal-head look-head">
+        <h2 id="price-users-heading">Usuarios</h2>
+        <button type="button" id="price-users-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <p class="info-text">Cualquier usuario puede llevar este precio. El super lo usa para crear cupones con su saldo y para dar membresías a los usuarios que él creó.</p>
+      <input id="price-user-find" type="search" placeholder="Buscar usuario" aria-label="Buscar usuario" autocomplete="off">
+      <div id="price-user-list" class="price-user-list"></div>
+      <button type="button" id="price-users-done" class="solid">Listo</button>
+    </div>
+  </div>
+
+  <div id="price-drop-modal" class="modal" hidden>
+    <div class="modal-card paper-card info-card" role="dialog" aria-modal="true" aria-labelledby="price-drop-heading">
+      <div class="modal-head look-head">
+        <h2 id="price-drop-heading">Quitar precio</h2>
+        <button type="button" id="price-drop-close" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <p id="price-drop-text" class="info-text"></p>
+      <div class="modal-actions">
+        <button type="button" id="price-drop-cancel" class="ghost">Cancelar</button>
+        <button type="button" id="price-drop-yes" class="solid">Quitar</button>
+      </div>
     </div>
   </div>
 
@@ -1411,7 +1472,60 @@
       <div id="plan-box" class="plan-box">
         <div id="plan-perks" class="plan-perks" hidden>
           <p>Incluye</p>
-          <ul id="plan-copy"></ul>
+          <div id="plan-copy" class="perk-show">
+            <article class="perk">
+              <h3>Notas y plantillas</h3>
+              <div class="perk-shot perk-notes" aria-hidden="true">
+                <div class="perk-chips"><span>Matemática</span><b>Compras</b><span>Cita médica</span></div>
+                <i><em>1</em>Leche, pan, fruta</i>
+                <i><em>2</em>Huevos</i>
+                <i><em>3</em>Café</i>
+              </div>
+              <small>Escribes, las ordenas por plantilla y abres la nota al lado o a pantalla completa.</small>
+            </article>
+            <article class="perk">
+              <h3>Avisos</h3>
+              <div class="perk-shot perk-cal" aria-hidden="true">
+                <div class="perk-days"><span>L</span><span>M</span><span>X</span><b>J<small>8:00</small></b><span>V</span><span>S</span><span>D</span></div>
+                <strong>Compras · 8:00 a. m.</strong>
+              </div>
+              <small>Eliges el día y la hora. La campana avisa en todas las plantillas, también de lo que está por vencer.</small>
+            </article>
+            <article class="perk">
+              <h3>Gastos por categoría</h3>
+              <div class="perk-shot perk-spend" aria-hidden="true">
+                <i><em></em>Compras<b>$15.000</b></i>
+                <i><em></em>Casa<b>$8.000</b></i>
+                <i><em></em>Salud<b>$4.000</b></i>
+              </div>
+              <small>Cada plantilla suma lo que anotas y lo separa por categoría.</small>
+            </article>
+            <article class="perk">
+              <h3>Formato de texto</h3>
+              <div class="perk-shot perk-format" aria-hidden="true">
+                <div class="perk-tools"><span>B</span><span>I</span><span>S</span><span>U</span><span class="ink"></span><span class="mark"></span><span>1.</span><span>•</span><span>☐</span></div>
+                <p><b>Leche</b>, <i>pan</i> y <s>fruta</s> <u>fresca</u></p>
+              </div>
+              <small>Negrita, cursiva, tachado, subrayado, colores, listas, casillas, fuente, imagen, archivo, buscar y copiar.</small>
+            </article>
+            <article class="perk">
+              <h3>La barra a tu medida</h3>
+              <div class="perk-shot perk-order" aria-hidden="true">
+                <div><b>1</b>Negrita</div><div><b>2</b>Cursiva</div>
+                <div><b>3</b>Tachado</div><div><b>4</b>Subrayado</div>
+                <label><span>Tamaño</span><i></i></label>
+              </div>
+              <small>Cambias el orden con un número, el tamaño y tres atajos de color. También deshacer, rehacer y ocultar la barra.</small>
+            </article>
+            <article class="perk">
+              <h3>Copias y seguridad</h3>
+              <div class="perk-shot perk-safe" aria-hidden="true">
+                <i><em></em><span>Copia de hoy</span><b>Exportar</b></i>
+                <i><em></em><span>Contraseña</span><b>Activa</b></i>
+              </div>
+              <small>Exportas e importas una copia, proteges una nota y puedes pedir contraseña para abrir la aplicación.</small>
+            </article>
+          </div>
         </div>
         <div id="plan-periods" class="plan-periods"></div>
         <button type="button" id="plan-use-balance" class="solid">Activar con saldo</button>
@@ -1456,15 +1570,15 @@
     </div>
   </section>
 
-  <script src="js/app.js?v=104"></script>
-  <script src="js/features.js?v=99"></script>
-  <script src="js/account.js?v=87"></script>
+  <script src="js/app.js?v=108"></script>
+  <script src="js/features.js?v=106"></script>
+  <script src="js/account.js?v=90"></script>
   <script>
     if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
       navigator.serviceWorker.register("sw.js").catch(function () {});
     }
   </script>
-  <script src="js/payments.js?v=18"></script>
+  <script src="js/payments.js?v=24"></script>
   <script src="js/spend.js?v=17"></script>
 </body>
 </html>

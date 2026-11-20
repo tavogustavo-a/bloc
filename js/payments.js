@@ -151,15 +151,7 @@
       el.innerHTML = `<small>Suscripción</small><strong>${escapeHtml(view.title)}</strong><span>${escapeHtml(view.detail)}</span>`;
     });
     const perks = document.getElementById("plan-perks");
-    const copy = document.getElementById("plan-copy");
-    const items = String(data?.plan?.description || "")
-      .replace(/\.\s*$/, "")
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .map((item) => item.charAt(0).toLocaleUpperCase("es") + item.slice(1));
-    if (perks) perks.hidden = !items.length;
-    if (copy) copy.innerHTML = items.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+    if (perks) perks.hidden = !data?.plan;
     const periods = document.getElementById("plan-periods");
     const useBalance = document.getElementById("plan-use-balance");
     if (useBalance) useBalance.hidden = inApp() || data?.admin || data?.permanent;
@@ -257,7 +249,22 @@
     ["year", "1 año"],
   ];
 
+  function monthAmount(text) {
+    const digits = String(text || "").replace(/[^\d]/g, "");
+    const amount = Number(digits);
+    return amount > 0 ? amount : 0;
+  }
+
+  function fillDerived(prefix) {
+    const month = monthAmount(document.getElementById(`${prefix}month`)?.value);
+    [["quarter", 3, 0.9], ["half", 6, 0.8], ["year", 12, 0.7]].forEach(([key, months, rate]) => {
+      const field = document.getElementById(`${prefix}${key}`);
+      if (field) field.value = month ? Math.round(month * months * rate).toLocaleString("es-CO") : "";
+    });
+  }
+
   function pricePayload(prefix) {
+    fillDerived(prefix);
     return {
       month: document.getElementById(`${prefix}month`)?.value || "",
       quarter: document.getElementById(`${prefix}quarter`)?.value || "",
@@ -285,15 +292,35 @@
   window.fillPlanChoices = fillPlanChoices;
   window.fillPriceChoices = fillPriceChoices;
 
+  let pricePage = 1;
+  let priceQuery = "";
+
   function paintPrices() {
     const list = document.getElementById("price-list");
     if (!list || !data?.admin) return;
     const rows = data.priceLists || [];
-    list.innerHTML = rows.length ? rows.map((row) => {
+    const tools = document.getElementById("price-tools");
+    const pager = document.getElementById("price-pager");
+    const paged = rows.length > 10;
+    if (tools) tools.hidden = !paged;
+    if (pager) pager.hidden = !paged;
+    const query = priceQuery.trim().toLocaleLowerCase("es");
+    const filtered = rows.filter((row) => !query || String(row.name || "Precio").toLocaleLowerCase("es").includes(query));
+    const size = 10;
+    const pages = Math.max(1, Math.ceil(filtered.length / size));
+    if (pricePage > pages) pricePage = pages;
+    const shown = paged ? filtered.slice((pricePage - 1) * size, pricePage * size) : filtered;
+    list.innerHTML = shown.length ? shown.map((row) => {
       const bits = PRICE_BITS.map(([key, label]) => `${label} ${money(row.prices?.[key])}`).join(" · ");
-      const remove = row.id === "principal" ? "" : `<button type="button" class="user-ico user-ico-delete" data-price-delete="${escapeHtml(row.id)}" data-price-name="${escapeHtml(row.name || "Precio")}" aria-label="Eliminar"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M5 7.4h14"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M9.2 7.2V5.4h5.6v1.8"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M7.4 7.4 8.3 19h7.4l.9-11.6"/></svg></button>`;
-      return `<li class="user-row price-row${row.id === "principal" ? " price-main" : ""}" data-price-open="${escapeHtml(row.id)}"><span class="user-name">${escapeHtml(row.name || "Precio")}<span class="price-bits">${bits}</span></span>${remove}</li>`;
-    }).join("") : `<li class="user-empty">Todavía no hay precios.</li>`;
+      const remove = row.id === "principal" ? "" : `<button type="button" class="price-x" data-price-delete="${escapeHtml(row.id)}" data-price-name="${escapeHtml(row.name || "Precio")}" aria-label="Quitar">✕</button>`;
+      return `<li class="user-row price-row" data-price-open="${escapeHtml(row.id)}"><span class="user-name">${escapeHtml(row.name || "Precio")}<span class="price-bits">${bits}</span></span>${remove}</li>`;
+    }).join("") : `<li class="user-empty">${query ? "No hay precios con ese nombre." : "Todavía no hay precios."}</li>`;
+    const label = document.getElementById("price-page");
+    if (label) label.textContent = `Página ${pricePage} de ${pages}`;
+    const prev = document.getElementById("price-prev");
+    const next = document.getElementById("price-next");
+    if (prev) prev.disabled = pricePage <= 1;
+    if (next) next.disabled = pricePage >= pages;
   }
 
   function priceNote(id, message, bad) {
@@ -304,7 +331,68 @@
     el.classList.toggle("cal-conflict", Boolean(message && bad));
   }
 
+  let priceUsers = new Set();
+  let priceUserQuery = "";
+
+  function pricePeople() {
+    const rows = Array.isArray(data?.pricePeople) ? data.pricePeople : (Array.isArray(data?.supers) ? data.supers : []);
+    return rows.filter((person) => person && person.role !== "admin");
+  }
+
+  function nextPrice(id) {
+    const rows = data?.priceLists || [];
+    const index = rows.findIndex((row) => row.id === id);
+    return rows.slice(index + 1).find((row) => row.id && row.id !== id) || rows.find((row) => row.id === "principal") || { id: "principal", name: "Principal" };
+  }
+
+  function paintPriceUsers() {
+    const list = document.getElementById("price-user-list");
+    const find = document.getElementById("price-user-find");
+    const people = pricePeople();
+    if (find) find.hidden = people.length <= 5;
+    if (!list) return;
+    const query = priceUserQuery.trim().toLocaleLowerCase("es");
+    const shown = people.filter((person) => !query || String(person.username || "").toLocaleLowerCase("es").includes(query));
+    list.innerHTML = shown.length ? shown.map((person) => {
+      const on = priceUsers.has(person.id);
+      return `<button type="button" class="${on ? "is-on" : ""}" data-price-user="${escapeHtml(person.id)}" aria-pressed="${on}">${escapeHtml(person.username || "Usuario")}</button>`;
+    }).join("") : `<p class="color-note-title">No hay usuarios.</p>`;
+  }
+
+  function closePriceUsers() {
+    const modal = document.getElementById("price-users-modal");
+    if (modal) modal.hidden = true;
+  }
+
+  function openPriceUsers() {
+    const modal = document.getElementById("price-users-modal");
+    if (!modal) return;
+    paintPriceUsers();
+    modal.hidden = false;
+  }
+
+  function closePriceDrop() {
+    const modal = document.getElementById("price-drop-modal");
+    if (modal) {
+      modal.hidden = true;
+      delete modal.dataset.id;
+    }
+  }
+
+  function askPriceDrop(id, name) {
+    const modal = document.getElementById("price-drop-modal");
+    const text = document.getElementById("price-drop-text");
+    const next = nextPrice(id);
+    if (!modal || !text) return;
+    modal.dataset.id = id;
+    const landing = next.id === "principal"
+      ? "Vuelven al precio principal."
+      : `Pasan a ${next.name}, el siguiente de la lista.`;
+    text.textContent = `${name} se quita de todos los usuarios que lo tienen. ${landing}`;
+    modal.hidden = false;
+  }
   function closePriceEdit() {
+    closePriceUsers();
     const modal = document.getElementById("price-edit-modal");
     if (modal) modal.hidden = true;
   }
@@ -323,12 +411,19 @@
     const fields = { month: "price-edit-month", quarter: "price-edit-quarter", half: "price-edit-half", year: "price-edit-year" };
     Object.entries(fields).forEach(([key, field]) => {
       const input = document.getElementById(field);
-      if (input) input.value = row.prices?.[key] ?? "";
+      if (input && key === "month") input.value = row.prices?.[key] ?? "";
     });
+    fillDerived("price-edit-");
     const lead = document.getElementById("price-edit-note");
     if (lead) lead.textContent = row.id === "principal" ? "Este es el precio que ve el usuario." : "Precio interno del super. El usuario ve el principal.";
     const error = document.getElementById("price-edit-error");
     if (error) error.hidden = true;
+    closePriceUsers();
+    priceUserQuery = "";
+    const find = document.getElementById("price-user-find");
+    if (find) find.value = "";
+    priceUsers = new Set(pricePeople().filter((person) => (person.priceListId || "principal") === row.id).map((person) => person.id));
+    paintPriceUsers();
     modal.hidden = false;
     (row.id === "principal" ? document.getElementById("price-edit-month") : name)?.focus();
   }
@@ -714,6 +809,12 @@
     const title = document.querySelector("#account-bar h2");
     if (title) title.textContent = "Membresías";
     priceNote("price-create-note", "");
+    const bloc = window.Bloc;
+    if (bloc && bloc.state.pricesOpen !== true) {
+      bloc.state.pricesOpen = true;
+      bloc.state.accountOpen = true;
+      bloc.save();
+    }
     load().catch((error) => priceNote("price-create-note", error.message, true));
   };
 
@@ -724,36 +825,98 @@
     closePriceEdit();
     const title = document.querySelector("#account-bar h2");
     if (title && !document.body.classList.contains("pay-open")) title.textContent = "Cuenta";
+    const account = document.getElementById("account-modal");
+    if (account) account.hidden = false;
+    document.body.classList.add("account-open");
+    const bloc = window.Bloc;
+    if (bloc?.state.pricesOpen) {
+      bloc.state.pricesOpen = false;
+      bloc.state.accountOpen = true;
+      bloc.save();
+    }
   };
 
-  document.getElementById("prices-back")?.addEventListener("click", () => window.closeBlocPrices());
   document.getElementById("price-edit-close")?.addEventListener("click", closePriceEdit);
   document.getElementById("price-edit-modal")?.addEventListener("click", (event) => {
     if (event.target.id === "price-edit-modal") closePriceEdit();
   });
-  document.getElementById("price-list")?.addEventListener("click", async (event) => {
+  document.getElementById("price-drop-cancel")?.addEventListener("click", closePriceDrop);
+  document.getElementById("price-drop-close")?.addEventListener("click", closePriceDrop);
+  document.getElementById("price-drop-modal")?.addEventListener("click", (event) => {
+    if (event.target.id === "price-drop-modal") closePriceDrop();
+  });
+  document.getElementById("price-drop-yes")?.addEventListener("click", async () => {
+    const id = document.getElementById("price-drop-modal")?.dataset.id || "";
+    if (!id) return closePriceDrop();
+    try {
+      await send("/api/prices/delete", { id });
+      closePriceDrop();
+      window.refreshBlocUsers?.();
+    } catch (error) {
+      priceNote("price-create-note", error.message, true);
+      closePriceDrop();
+    }
+  });
+  document.getElementById("price-edit-users")?.addEventListener("click", openPriceUsers);
+  document.getElementById("price-users-close")?.addEventListener("click", closePriceUsers);
+  document.getElementById("price-users-done")?.addEventListener("click", closePriceUsers);
+  document.getElementById("price-users-modal")?.addEventListener("click", (event) => {
+    if (event.target.id === "price-users-modal") closePriceUsers();
+  });
+  document.getElementById("price-user-find")?.addEventListener("input", (event) => {
+    priceUserQuery = event.target.value || "";
+    paintPriceUsers();
+  });
+  document.getElementById("price-user-list")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-price-user]");
+    if (!button) return;
+    const id = button.dataset.priceUser;
+    if (priceUsers.has(id)) priceUsers.delete(id);
+    else priceUsers.add(id);
+    paintPriceUsers();
+  });
+  document.getElementById("price-search")?.addEventListener("input", (event) => {
+    priceQuery = event.target.value || "";
+    pricePage = 1;
+    const clear = document.getElementById("price-search-clear");
+    if (clear) clear.hidden = !priceQuery;
+    paintPrices();
+  });
+  document.getElementById("price-search-clear")?.addEventListener("click", () => {
+    priceQuery = "";
+    pricePage = 1;
+    const field = document.getElementById("price-search");
+    const clear = document.getElementById("price-search-clear");
+    if (field) field.value = "";
+    if (clear) clear.hidden = true;
+    paintPrices();
+  });
+  document.getElementById("price-prev")?.addEventListener("click", () => {
+    pricePage = Math.max(1, pricePage - 1);
+    paintPrices();
+  });
+  document.getElementById("price-next")?.addEventListener("click", () => {
+    pricePage += 1;
+    paintPrices();
+  });
+  document.getElementById("price-list")?.addEventListener("click", (event) => {
     const remove = event.target.closest("[data-price-delete]");
     if (remove) {
       event.stopPropagation();
-      const name = remove.dataset.priceName || "este precio";
-      if (!confirmTwice(`¿Eliminar el precio ${name}?`, "Segunda confirmación. Los super que lo tengan vuelven al precio principal.")) return;
-      try {
-        await send("/api/prices/delete", { id: remove.dataset.priceDelete });
-        window.refreshBlocUsers?.();
-      } catch (error) {
-        priceNote("price-create-note", error.message, true);
-      }
+      askPriceDrop(remove.dataset.priceDelete, remove.dataset.priceName || "Este precio");
       return;
     }
     const open = event.target.closest("[data-price-open]");
     if (open) openPriceEdit(open.dataset.priceOpen);
   });
+  document.getElementById("price-month")?.addEventListener("input", () => fillDerived("price-"));
+  document.getElementById("price-edit-month")?.addEventListener("input", () => fillDerived("price-edit-"));
   document.getElementById("price-create")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const name = document.getElementById("price-name")?.value.trim() || "";
     const prices = pricePayload("price-");
-    if (!name || Object.values(prices).some((value) => !String(value).trim())) {
-      priceNote("price-create-note", "Escribe el nombre y los cuatro precios.", true);
+    if (!name || !monthAmount(prices.month)) {
+      priceNote("price-create-note", "Escribe el nombre y el precio de 1 mes.", true);
       return;
     }
     try {
@@ -771,15 +934,15 @@
     const name = document.getElementById("price-edit-name")?.value.trim() || "";
     const prices = pricePayload("price-edit-");
     const error = document.getElementById("price-edit-error");
-    if (!name || Object.values(prices).some((value) => !String(value).trim())) {
+    if (!name || !monthAmount(prices.month)) {
       if (error) {
         error.hidden = false;
-        error.textContent = "Escribe el nombre y los cuatro precios.";
+        error.textContent = "Escribe el nombre y el precio de 1 mes.";
       }
       return;
     }
     try {
-      await send("/api/prices/save", { id, name, prices });
+      await send("/api/prices/save", { id, name, prices, userIds: [...priceUsers] });
       closePriceEdit();
       window.refreshBlocUsers?.();
     } catch (err) {
