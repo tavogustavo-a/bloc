@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,620&family=Outfit:wght@380;500;640&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=260">
+  <link rel="stylesheet" href="css/styles.css?v=271">
   <script>
     try { if (!localStorage.getItem("bloc-cuenta")) document.documentElement.classList.add("locked-out"); } catch (e) {}
   </script>
@@ -938,9 +938,12 @@
         <select id="user-edit-price" name="user-edit-price" aria-label="Precio del super" hidden>
           <option value="principal">Principal</option>
         </select>
-        <label class="info-switch"><input id="user-edit-negative" type="checkbox" name="user-edit-negative"> Puede quedar con saldo negativo</label>
-        <label class="info-switch"><input id="user-edit-permanent" type="checkbox" name="user-edit-permanent"> Permanente, sin cobro</label>
-        <label class="info-switch" id="user-edit-create-row" hidden><input id="user-edit-create" type="checkbox" name="user-edit-create"> Puede crear usuarios registro</label>
+        <div class="edit-checks">
+          <label class="info-switch"><input id="user-edit-negative" type="checkbox" name="user-edit-negative"> Puede quedar con saldo negativo</label>
+          <label class="info-switch"><input id="user-edit-unlimited" type="checkbox" name="user-edit-unlimited"> Puede tener saldo ilimitado</label>
+          <label class="info-switch"><input id="user-edit-permanent" type="checkbox" name="user-edit-permanent"> Permanente, sin cobro</label>
+          <label class="info-switch" id="user-edit-create-row" hidden><input id="user-edit-create" type="checkbox" name="user-edit-create"> Puede crear usuarios registro</label>
+        </div>
         <p id="user-edit-error" class="cal-conflict" hidden></p>
         <button type="button" id="user-edit-save" class="solid">Guardar</button>
       </form>
@@ -1221,7 +1224,7 @@
           </div>
         </div>
       </div>
-      <a class="login-forgot" href="/privacidad.html">Política de privacidad</a>
+      <a id="privacy-link" class="login-forgot" href="/privacidad.html" hidden>Política de privacidad</a>
     </div>
   </section>
 
@@ -1234,36 +1237,10 @@
 
   <section id="shortcuts-page" class="account-page" hidden>
     <div class="account-block">
-      <button type="button" id="open-tool-order" class="edit-row edit-link">
-        <span class="edit-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26"><path d="M8 7h11M8 12h11M8 17h11M5 7h.01M5 12h.01M5 17h.01" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
-        <span class="edit-copy"><strong>Orden de la barra de herramientas</strong></span>
-      </button>
-      <div class="edit-row">
-        <span class="edit-copy"><strong>Mostrar la barra de formato</strong><small>Cuando está desactivada, la barra de formato no aparece nunca mientras editas</small></span>
-        <button type="button" id="shortcut-hide-tools" class="switch is-on" aria-pressed="true" aria-label="Mostrar la barra de formato"></button>
-      </div>
-      <div class="edit-row">
-        <span class="edit-copy"><strong>Ocultar automáticamente la barra de edición</strong><small>Se esconde mientras escribes y vuelve al seleccionar texto</small></span>
-        <button type="button" id="tool-autohide" class="switch" aria-pressed="false" aria-label="Ocultar automáticamente la barra de edición"></button>
-      </div>
-      <label class="edit-row">
-        <span class="edit-copy"><strong>Tamaño</strong></span>
-        <input id="bar-size" type="range" min="36" max="64" step="1" value="46" aria-label="Tamaño de la barra">
-      </label>
-      <div class="edit-row">
-        <span class="edit-copy"><strong>Atajos de color en la barra de herramientas</strong><small>Tres colores para pintar el texto sin abrir el selector</small></span>
-        <button type="button" id="tool-color-shortcuts" class="switch" aria-pressed="false" aria-label="Atajos de color"></button>
-      </div>
-      <div id="ink-picks" class="ink-picks" hidden>
-        <input id="ink-1" type="color" value="#c45b52" aria-label="Atajo de color 1">
-        <input id="ink-2" type="color" value="#1a1814" aria-label="Atajo de color 2">
-        <input id="ink-3" type="color" value="#2f6f4e" aria-label="Atajo de color 3">
-      </div>
       <div class="edit-row"><span class="edit-copy"><strong>Deshacer acción</strong></span><button type="button" class="switch is-on" data-bar="undo" aria-pressed="true" aria-label="Deshacer acción"></button></div>
       <div class="edit-row"><span class="edit-copy"><strong>Rehacer acción</strong></span><button type="button" class="switch is-on" data-bar="redo" aria-pressed="true" aria-label="Rehacer acción"></button></div>
       <div class="edit-row">
-        <span class="edit-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M12 3.6a1 1 0 0 1 1 .9v.6a5.2 5.2 0 0 1 4.2 5.1v2.8l1.2 1.8H5.6l1.2-1.8V10.2A5.2 5.2 0 0 1 11 5.1v-.6a1 1 0 0 1 1-.9z"/><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M9.7 18.2a2.3 2.3 0 0 0 4.6 0"/></svg></span>
-        <span class="edit-copy"><strong>Mostrar icono de notificaciones</strong><small>Se ve en todas las plantillas</small></span>
+        <span class="edit-copy"><strong>Mostrar icono de notificaciones</strong></span>
         <button type="button" id="shortcut-show-notify" class="switch is-on" aria-pressed="true" aria-label="Mostrar icono de notificaciones"></button>
       </div>
       <div class="shortcut-row">
@@ -1287,12 +1264,12 @@
         </div>
         <div class="edit-row">
           <span class="edit-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26"><path d="M5 19.2h8.2l6-6.1a2.2 2.2 0 0 0 0-3.1l-2.2-2.2a2.2 2.2 0 0 0-3.1 0L5 16.8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M4.2 20.2h6.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
-          <span class="edit-copy"><strong>Borrar</strong><button type="button" class="info-ico" data-info="Borra la nota que elijas. Si está apagado, no se puede eliminar." aria-label="Qué hace borrar"><svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.7"/><path fill="currentColor" d="M11 10h2v6h-2zM11 7h2v2h-2z"/></svg></button></span>
+          <span class="edit-copy edit-inline"><strong>Borrar</strong><button type="button" class="info-ico" data-info="Borra la nota que elijas. Si está apagado, no se puede eliminar." aria-label="Qué hace borrar"><svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.7"/><path fill="currentColor" d="M11 10h2v6h-2zM11 7h2v2h-2z"/></svg></button></span>
           <button type="button" id="tool-delete" class="switch is-on" aria-pressed="true" aria-label="Borrar"></button>
         </div>
         <div class="edit-row">
           <span class="edit-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26"><rect x="8" y="7" width="11" height="13" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 16.5V5.6h10.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span>
-          <span class="edit-copy"><strong>Copiar</strong><button type="button" class="info-ico" data-info="Copia el texto de la nota abierta con el icono de las dos hojas en la barra." aria-label="Qué hace copiar"><svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.7"/><path fill="currentColor" d="M11 10h2v6h-2zM11 7h2v2h-2z"/></svg></button></span>
+          <span class="edit-copy edit-inline"><strong>Copiar</strong><button type="button" class="info-ico" data-info="Copia el texto de la nota abierta con el icono de las dos hojas en la barra." aria-label="Qué hace copiar"><svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.7"/><path fill="currentColor" d="M11 10h2v6h-2zM11 7h2v2h-2z"/></svg></button></span>
           <button type="button" id="tool-copy" class="switch is-on" aria-pressed="true" aria-label="Copiar"></button>
         </div>
         <div class="edit-row">
@@ -1313,6 +1290,27 @@
       </div>
       <h3 class="edit-sec-title">Barra de herramientas</h3>
       <div id="bar-sec">
+        <div class="edit-row">
+          <span class="edit-copy"><strong>Mostrar la barra de formato</strong><small>Cuando está desactivada, la barra de formato no aparece nunca mientras editas</small></span>
+          <button type="button" id="shortcut-hide-tools" class="switch is-on" aria-pressed="true" aria-label="Mostrar la barra de formato"></button>
+        </div>
+        <div class="edit-row">
+          <span class="edit-copy"><strong>Ocultar automáticamente la barra de edición</strong><small>Se esconde mientras escribes y vuelve al seleccionar texto</small></span>
+          <button type="button" id="tool-autohide" class="switch" aria-pressed="false" aria-label="Ocultar automáticamente la barra de edición"></button>
+        </div>
+        <label class="edit-row">
+          <span class="edit-copy"><strong>Tamaño</strong></span>
+          <input id="bar-size" type="range" min="36" max="64" step="1" value="46" aria-label="Tamaño de la barra">
+        </label>
+        <div class="edit-row">
+          <span class="edit-copy"><strong>Atajos de color en la barra de herramientas</strong><small>Tres colores para pintar el texto sin abrir el selector</small></span>
+          <button type="button" id="tool-color-shortcuts" class="switch" aria-pressed="false" aria-label="Atajos de color"></button>
+        </div>
+        <div id="ink-picks" class="ink-picks" hidden>
+          <input id="ink-1" type="color" value="#c45b52" aria-label="Atajo de color 1">
+          <input id="ink-2" type="color" value="#1a1814" aria-label="Atajo de color 2">
+          <input id="ink-3" type="color" value="#2f6f4e" aria-label="Atajo de color 3">
+        </div>
         <div class="edit-row"><span class="edit-copy"><strong>Negrita</strong></span><button type="button" class="switch is-on" data-bar="bold" aria-pressed="true" aria-label="Negrita"></button></div>
         <div class="edit-row"><span class="edit-copy"><strong>Cursiva</strong></span><button type="button" class="switch is-on" data-bar="italic" aria-pressed="true" aria-label="Cursiva"></button></div>
         <div class="edit-row"><span class="edit-copy"><strong>Texto tachado</strong></span><button type="button" class="switch is-on" data-bar="strike" aria-pressed="true" aria-label="Texto tachado"></button></div>
@@ -1330,6 +1328,11 @@
         <div class="edit-row"><span class="edit-copy"><strong>Campo de búsqueda de texto</strong></span><button type="button" class="switch is-on" data-bar="find" aria-pressed="true" aria-label="Campo de búsqueda de texto"></button></div>
         <div class="edit-row"><span class="edit-copy"><strong>Copiar</strong></span><button type="button" class="switch is-on" data-bar="copy" aria-pressed="true" aria-label="Copiar"></button></div>
       </div>
+      <button type="button" id="open-tool-order" class="edit-row edit-link">
+        <span class="edit-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26"><path d="M8 7h11M8 12h11M8 17h11M5 7h.01M5 12h.01M5 17h.01" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+        <span class="edit-copy"><strong>Orden de la barra de herramientas</strong></span>
+      </button>
+      <h3 class="edit-sec-title">Seguridad y notificaciones</h3>
       <div class="shortcut-row">
         <span>Ocultar editor</span>
         <button type="button" id="shortcut-hide-editor" class="switch" aria-pressed="false" aria-label="Ocultar editor"></button>
@@ -1513,7 +1516,7 @@
               <div class="perk-shot perk-order" aria-hidden="true">
                 <div><b>1</b>Negrita</div><div><b>2</b>Cursiva</div>
                 <div><b>3</b>Tachado</div><div><b>4</b>Subrayado</div>
-                <label><span>Tamaño</span><i></i></label>
+                <span class="perk-size"><span>Tamaño</span><i></i></span>
               </div>
               <small>Cambias el orden con un número, el tamaño y tres atajos de color. También deshacer, rehacer y ocultar la barra.</small>
             </article>
@@ -1570,15 +1573,15 @@
     </div>
   </section>
 
-  <script src="js/app.js?v=108"></script>
-  <script src="js/features.js?v=106"></script>
-  <script src="js/account.js?v=90"></script>
+  <script src="js/app.js?v=110"></script>
+  <script src="js/features.js?v=108"></script>
+  <script src="js/account.js?v=93"></script>
   <script>
     if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
       navigator.serviceWorker.register("sw.js").catch(function () {});
     }
   </script>
-  <script src="js/payments.js?v=24"></script>
+  <script src="js/payments.js?v=25"></script>
   <script src="js/spend.js?v=17"></script>
 </body>
 </html>

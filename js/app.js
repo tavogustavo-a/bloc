@@ -71,6 +71,7 @@ const DEFAULT_TEMPLATES = {
 };
 
 const state = load();
+rememberTab();
 purgeOldTrash();
 const now = new Date();
 const calView = { year: now.getFullYear(), month: now.getMonth(), date: keyFromDate(now), mode: "browse" };
@@ -118,13 +119,50 @@ function blank() {
 }
 
 function load() {
+  let next = blank();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return normalize(JSON.parse(raw));
-    const old = localStorage.getItem(OLD_KEY);
-    if (old) return migrate(JSON.parse(old));
+    if (raw) next = normalize(JSON.parse(raw));
+    else {
+      const old = localStorage.getItem(OLD_KEY);
+      if (old) next = migrate(JSON.parse(old));
+    }
   } catch { /* guarda nueva */ }
-  return blank();
+  placeTab(next);
+  return next;
+}
+
+function tabView() {
+  return {
+    openId: state.openId || null,
+    listView: state.listView,
+    showDetail: state.showDetail !== false,
+    focusOpen: state.focusOpen === true,
+    accountOpen: state.accountOpen === true,
+    shortcutsOpen: state.shortcutsOpen === true,
+    toolOrderOpen: state.toolOrderOpen === true,
+    pricesOpen: state.pricesOpen === true,
+    activeTemplate: state.activeTemplate || null,
+  };
+}
+
+function rememberTab() {
+  try { sessionStorage.setItem("bloc-vista", JSON.stringify(tabView())); } catch { /* privado */ }
+}
+
+function placeTab(target) {
+  let view = null;
+  try { view = JSON.parse(sessionStorage.getItem("bloc-vista") || "null"); } catch { view = null; }
+  if (!view || typeof view !== "object") return;
+  target.openId = view.openId || null;
+  if (["active", "archived", "trash"].includes(view.listView)) target.listView = view.listView;
+  if ("showDetail" in view) target.showDetail = view.showDetail !== false;
+  target.focusOpen = view.focusOpen === true;
+  target.accountOpen = view.accountOpen === true;
+  target.shortcutsOpen = view.shortcutsOpen === true;
+  target.toolOrderOpen = view.toolOrderOpen === true;
+  target.pricesOpen = view.pricesOpen === true;
+  target.activeTemplate = view.activeTemplate || null;
 }
 
 function normalize(data) {
@@ -636,6 +674,7 @@ function snapshot() {
 }
 
 function save() {
+  rememberTab();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot()));
   document.dispatchEvent(new Event("bloc-saved"));
   syncNativeAlarms();
@@ -722,6 +761,7 @@ function applyRemoteState(data) {
   state.alarmUntilTouch = next.alarmUntilTouch === true;
   state.alarmVibrate = next.alarmVibrate === true;
   state.alarmContinuous = next.alarmContinuous === true;
+  placeTab(state);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot()));
   render();
   restorePlace();
@@ -913,11 +953,13 @@ function renderList() {
   const view = state.listView || "active";
   document.body.classList.toggle("archive-only", view === "archived");
   const query = fold(els.search.value.trim());
-  const here = state.accountOpen === true ? "account" : view;
+  const shortcuts = state.shortcutsOpen === true || state.toolOrderOpen === true;
+  const here = shortcuts ? "shortcuts" : state.accountOpen === true ? "account" : view;
   els.toggleArchived.setAttribute("aria-pressed", String(here === "archived"));
   els.toggleArchived.setAttribute("aria-label", view === "archived" ? "Volver a notas" : "Ver archivados");
   els.toggleTrash.setAttribute("aria-pressed", String(here === "trash"));
   document.querySelector("[data-menu='home']")?.setAttribute("aria-pressed", String(here === "active"));
+  document.querySelector("[data-menu='shortcuts']")?.setAttribute("aria-pressed", String(here === "shortcuts"));
   document.querySelector("[data-menu='account']")?.setAttribute("aria-pressed", String(here === "account"));
   els.toggleTrash.setAttribute("aria-label", view === "trash" ? "Volver a notas" : "Eliminados");
   const files = state.files.filter((file) => fileInView(file, view))

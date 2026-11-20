@@ -1350,6 +1350,7 @@ class Handler(SimpleHTTPRequestHandler):
                     "active": item.get("active") is not False,
                     "balance": wallet_of(pay, item.get("id")),
                     "allowNegative": item.get("allowNegative") is True,
+                    "unlimitedBalance": item.get("unlimitedBalance") is True,
                     "permanent": item.get("permanent") is True,
                     "until": int(item.get("subscriptionUntil") or 0),
                     "periodId": (item.get("membership") or {}).get("periodId") or item.get("periodId") or "",
@@ -1474,6 +1475,8 @@ class Handler(SimpleHTTPRequestHandler):
                     target["role"] = "super" if data.get("super") else "registro"
                 if "allowNegative" in data:
                     target["allowNegative"] = bool(data.get("allowNegative"))
+                if "unlimitedBalance" in data:
+                    target["unlimitedBalance"] = bool(data.get("unlimitedBalance"))
                 if "permanent" in data:
                     target["permanent"] = bool(data.get("permanent"))
                 if target.get("role") == "super" and "canCreateRegistro" in data:
@@ -1502,7 +1505,7 @@ class Handler(SimpleHTTPRequestHandler):
                 charged = None
                 if payer and payer.get("role") == "super":
                     charged = list_price(pay, payer, plan_period(period_id, pay))
-                ok, result = activate_period(target, pay, period_id, charged=charged)
+                ok, result = activate_period(target, pay, period_id, charged=charged, payer=payer if payer and payer.get("role") == "super" else None)
                 if not ok:
                     self.send_json(400, {"error": result})
                     return
@@ -1540,7 +1543,7 @@ class Handler(SimpleHTTPRequestHandler):
             charged = None
             if payer and payer.get("role") == "super":
                 charged = list_price(pay, payer, plan_period(period_id, pay))
-            ok, result = activate_period(target, pay, period_id, charged=charged)
+            ok, result = activate_period(target, pay, period_id, charged=charged, payer=payer if payer and payer.get("role") == "super" else None)
             if not ok:
                 self.send_json(400, {"error": result})
                 return
@@ -1572,6 +1575,9 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_json(403, {"error": "Solo puedes recargar a tus clientes."})
                 return
             pay = load_payments()
+            if actor.get("role") != "admin" and not take_funds(pay, actor, delta):
+                self.send_json(400, {"error": "No alcanza tu saldo para dar esa cantidad."})
+                return
             set_wallet(pay, uid, wallet_of(pay, uid) + delta)
             write_payments(pay)
         self.send_json(200, {"ok": True, "balance": wallet_of(pay, uid)})
@@ -1862,6 +1868,10 @@ class Handler(SimpleHTTPRequestHandler):
             pay = load_payments()
             if any(item.get("code") == code for item in pay["coupons"]):
                 self.send_json(409, {"error": "Ese código ya existe."})
+                return
+            total = round(float(amount) * max(int(uses or 1), 1), 2)
+            if not take_funds(pay, user, total):
+                self.send_json(400, {"error": "No alcanza tu saldo para ese cupón."})
                 return
             pay["coupons"].insert(0, {
                 "code": code,
@@ -2235,6 +2245,22 @@ PLAN = {
 MONTH_MS = 30 * 24 * 60 * 60 * 1000
 
 
+def take_funds(pay, person, amount):
+    try:
+        amount = round(float(amount or 0), 2)
+    except (TypeError, ValueError):
+        return False
+    if amount <= 0:
+        return True
+    if person and (person.get("role") == "admin" or person.get("unlimitedBalance") is True):
+        return True
+    balance = wallet_of(pay, person.get("id"))
+    if balance < amount and person.get("allowNegative") is not True:
+        return False
+    set_wallet(pay, person.get("id"), balance - amount)
+    return True
+
+
 def wallet_of(pay, user_id):
     try:
         return round(float(pay["balances"].get(user_id) or 0), 2)
@@ -2263,6 +2289,7 @@ def access_view(store, pay, user):
         "until": until,
         "permanent": user.get("permanent") is True,
         "allowNegative": user.get("allowNegative") is True,
+        "unlimitedBalance": user.get("unlimitedBalance") is True,
         "admin": admin,
         "needsPlan": not entitled(user),
         "playOnly": False,
@@ -2280,17 +2307,15 @@ def special_price(actor, period):
     return value if value > 0 else (period or {}).get("price") or 0
 
 
-def activate_period(user, pay, period_id, free=False, charged=None):
+def activate_period(user, pay, period_id, free=False, charged=None, payer=None):
     period = plan_period(period_id, pay)
     if not period:
         return False, "Ese plazo no existe."
     listed = period["price"]
     price = 0 if free else (listed if charged is None else charged)
-    balance = wallet_of(pay, user.get("id"))
-    if not free and balance < price and user.get("allowNegative") is not True:
+    who = payer or user
+    if not free and not take_funds(pay, who, price):
         return False, "No alcanza el saldo. Recarga o elige un plazo menor."
-    if not free:
-        set_wallet(pay, user.get("id"), balance - price)
     now = int(time.time() * 1000)
     base = max(now, int(user.get("subscriptionUntil") or 0))
     user["subscriptionUntil"] = base + period["months"] * MONTH_MS

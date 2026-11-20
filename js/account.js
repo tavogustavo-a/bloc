@@ -9,6 +9,10 @@
   let timer = null;
 
   const bloc = () => window.Bloc;
+  if (window.BlocNative) {
+    const privacy = document.getElementById("privacy-link");
+    if (privacy) privacy.hidden = false;
+  }
 
   function session() {
     try {
@@ -446,16 +450,16 @@
             : "";
       const manage = session()?.role === "admin";
       const boss = manage || session()?.role === "super";
-      const saldo = `$${Math.round(Number(user.balance) || 0).toLocaleString("es-CO")}`;
+      const saldo = user.unlimitedBalance ? "Saldo ilimitado" : `$${Math.round(Number(user.balance) || 0).toLocaleString("es-CO")}`;
       const prices = user.listed
         ? `<small class="user-parent">Ve $${Math.round(user.listed).toLocaleString("es-CO")}${user.charged && user.charged !== user.listed ? ` · interno $${Math.round(user.charged).toLocaleString("es-CO")}` : ""}</small>`
         : "";
       const member = `<small class="user-parent">${memberWhen(user)}</small>`;
       const priceLine = user.role === "super" && user.priceName ? `<small class="user-parent">Precio ${String(user.priceName).replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[char]))}</small>` : "";
       const apply = boss && !manage && !user.permanent ? `<select class="user-plan" data-user-plan="${user.id}" aria-label="Aplicar membresía"><option value="">Aplicar membresía</option><option value="month">1 mes</option><option value="quarter">3 meses</option><option value="half">6 meses</option><option value="year">1 año</option></select>` : "";
-      const credit = boss ? `<button type="button" class="user-ico user-ico-credit" data-user-credit="${user.id}" aria-label="Sumar saldo"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><text x="2" y="16" fill="#fff" font-size="11" font-family="sans-serif">$</text><path fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" d="M16 7v10M11 12h10"/></svg></button>` : "";
+      const credit = boss && !user.unlimitedBalance ? `<button type="button" class="user-ico user-ico-credit" data-user-credit="${user.id}" aria-label="Sumar saldo"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><text x="2" y="16" fill="#fff" font-size="11" font-family="sans-serif">$</text><path fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" d="M16 7v10M11 12h10"/></svg></button>` : "";
       const tools = manage ? `<button type="button" class="switch${on ? " is-on" : ""}" data-user-active="${user.id}" data-username="${user.username || ""}" data-email="${user.email || ""}" aria-pressed="${on}" aria-label="${on ? "Desactivar" : "Activar"}" ${self ? "disabled" : ""}></button>
-        <button type="button" class="user-ico" data-user-edit="${user.id}" data-role="${user.role || "user"}" data-username="${user.username || ""}" data-email="${user.email || ""}" data-negative="${user.allowNegative ? "1" : "0"}" data-permanent="${user.permanent ? "1" : "0"}" data-create="${user.canCreateRegistro ? "1" : "0"}" data-price="${user.priceListId || "principal"}" aria-label="Editar"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 16.5 15.2 5.3a1.8 1.8 0 0 1 2.5 0l1 1a1.8 1.8 0 0 1 0 2.5L7.5 20H4v-3.5z"/></svg></button>
+        <button type="button" class="user-ico" data-user-edit="${user.id}" data-role="${user.role || "user"}" data-username="${user.username || ""}" data-email="${user.email || ""}" data-negative="${user.allowNegative ? "1" : "0"}" data-unlimited="${user.unlimitedBalance ? "1" : "0"}" data-permanent="${user.permanent ? "1" : "0"}" data-create="${user.canCreateRegistro ? "1" : "0"}" data-price="${user.priceListId || "principal"}" aria-label="Editar"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 16.5 15.2 5.3a1.8 1.8 0 0 1 2.5 0l1 1a1.8 1.8 0 0 1 0 2.5L7.5 20H4v-3.5z"/></svg></button>
         <button type="button" class="user-ico user-ico-delete" data-user-delete="${user.id}" aria-label="Eliminar" ${self ? "disabled" : ""}><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M5 7.4h14"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M9.2 7.2V5.4h5.6v1.8"/><path fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" d="M7.4 7.4 8.3 19h7.4l.9-11.6"/></svg></button>` : "";
       return `<li class="user-row">
         <span class="user-name">${name}${kind}${parent}<small class="user-parent">Saldo ${saldo}</small>${member}${priceLine}${prices}</span>
@@ -917,6 +921,8 @@
       if (balance) balance.value = "";
       const negative = document.getElementById("user-edit-negative");
       if (negative) negative.checked = edit.dataset.negative === "1";
+      const unlimited = document.getElementById("user-edit-unlimited");
+      if (unlimited) unlimited.checked = edit.dataset.unlimited === "1";
       const permanent = document.getElementById("user-edit-permanent");
       if (permanent) permanent.checked = edit.dataset.permanent === "1";
       const rolePick = document.getElementById("user-edit-role");
@@ -966,6 +972,13 @@
     if (plan) plan.hidden = on;
   }
   document.getElementById("user-edit-permanent")?.addEventListener("change", syncPermanent);
+  document.getElementById("user-edit-unlimited")?.addEventListener("change", (event) => {
+    const box = event.target;
+    if (!box.checked) return;
+    const first = confirm("¿Estás seguro? Si activas esto podría vender y dar saldo a los clientes ilimitadamente.");
+    const second = first && confirm("¿Confirmas el saldo ilimitado? Podrá dar saldo, membresías y cupones sin límite.");
+    if (!second) box.checked = false;
+  });
   document.getElementById("user-edit-save")?.addEventListener("click", async () => {
     const note = document.getElementById("user-edit-error");
     const fail = (text) => { if (note) { note.hidden = !text; note.textContent = text || ""; } };
@@ -979,6 +992,7 @@
           password: document.getElementById("user-edit-pass").value,
           role: ["super", "google", "registro"].includes(document.getElementById("user-edit-role")?.value) ? document.getElementById("user-edit-role").value : "registro",
           allowNegative: Boolean(document.getElementById("user-edit-negative")?.checked),
+          unlimitedBalance: Boolean(document.getElementById("user-edit-unlimited")?.checked),
           permanent: Boolean(document.getElementById("user-edit-permanent")?.checked),
           canCreateRegistro: document.getElementById("user-edit-role")?.value === "super" && Boolean(document.getElementById("user-edit-create")?.checked),
           priceListId: document.getElementById("user-edit-role")?.value === "super" ? (document.getElementById("user-edit-price")?.value || "principal") : "principal",

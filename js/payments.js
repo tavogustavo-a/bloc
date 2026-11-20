@@ -416,6 +416,8 @@
     fillDerived("price-edit-");
     const lead = document.getElementById("price-edit-note");
     if (lead) lead.textContent = row.id === "principal" ? "Este es el precio que ve el usuario." : "Precio interno del super. El usuario ve el principal.";
+    const users = document.getElementById("price-edit-users");
+    if (users) users.hidden = row.id === "principal";
     const error = document.getElementById("price-edit-error");
     if (error) error.hidden = true;
     closePriceUsers();

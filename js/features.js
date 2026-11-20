@@ -92,42 +92,17 @@
       if (!drag) return;
       const dx = event.clientX - drag.x;
       if (Math.abs(dx) > 4) drag.moved = true;
-      if (!drag.btn) {
-        scroll.scrollLeft = drag.left - dx;
-        return;
-      }
-      drag.btn.classList.add("is-drag");
-      const items = [...scroll.querySelectorAll(".tool-ico")];
-      let next = null;
-      for (const el of items) {
-        if (el === drag.btn) continue;
-        const box = el.getBoundingClientRect();
-        if (event.clientX < box.left + box.width / 2) {
-          next = el;
-          break;
-        }
-      }
-      if (next) scroll.insertBefore(drag.btn, next);
-      else scroll.appendChild(drag.btn);
-      const edge = scroll.getBoundingClientRect();
-      if (event.clientX > edge.right - 36) scroll.scrollLeft += 14;
-      if (event.clientX < edge.left + 36) scroll.scrollLeft -= 14;
+      scroll.scrollLeft = drag.left - dx;
     });
     const finish = () => {
       if (!drag) return;
       const moved = drag.moved;
-      drag.btn?.classList.remove("is-drag");
       drag = null;
       if (!moved) return;
       scroll.dataset.dragged = "1";
-      const bloc = B();
-      if (!bloc) return;
-      bloc.state.toolOrder = [...scroll.querySelectorAll(".tool-ico")].map((el) => el.dataset.tool).filter(Boolean);
-      bloc.save();
     };
     scroll.addEventListener("pointerup", finish);
     scroll.addEventListener("pointercancel", () => {
-      drag?.btn?.classList.remove("is-drag");
       drag = null;
     });
     scroll.addEventListener("click", (event) => {
@@ -231,6 +206,11 @@
     }
   }
 
+  function markShortcutMenu(on) {
+    document.querySelector("[data-menu='shortcuts']")?.setAttribute("aria-pressed", String(on));
+    if (on) document.querySelector("[data-menu='home']")?.setAttribute("aria-pressed", "false");
+  }
+
   function closeShortcuts() {
     document.body.classList.remove("shortcuts-open", "tool-order-open");
     const order = document.getElementById("tool-order-page");
@@ -250,6 +230,8 @@
       bloc.state.toolOrderOpen = false;
       bloc.save();
     }
+    markShortcutMenu(false);
+    if (!stay) document.querySelector("[data-menu='home']")?.setAttribute("aria-pressed", "true");
   }
 
   function openShortcuts() {
@@ -272,6 +254,7 @@
       bloc.state.accountOpen = false;
       bloc.save();
     }
+    markShortcutMenu(true);
   }
 
   function toolIdsNow() {
